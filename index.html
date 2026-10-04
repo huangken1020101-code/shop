@@ -1,0 +1,3231 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>奇幻道具屋：格子背包與櫃台經營誌</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <!-- FontAwesome Icon CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&display=swap');
+        body {
+            font-family: 'Noto Serif TC', serif;
+            background-color: #090d16;
+            color: #f8fafc;
+            user-select: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .gold-text {
+            color: #fbbf24;
+            text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+        }
+        .pulse-btn {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        /* 背包格子懸浮 hover 放置預覽 */
+        .grid-cell-valid {
+            background-color: rgba(16, 185, 129, 0.4) !important;
+            border-color: #10b981 !important;
+        }
+        .grid-cell-invalid {
+            background-color: rgba(239, 68, 68, 0.4) !important;
+            border-color: #ef4444 !important;
+        }
+        .grid-cell-drag-over {
+            background-color: rgba(59, 130, 246, 0.35) !important;
+            border-color: #3b82f6 !important;
+        }
+        .dragging-item { opacity: 0.45; }
+        .counter-offer-selected { ring: 2px; box-shadow: 0 0 0 2px #fbbf24; }
+        .quality-junk { color: #78716c; }
+        .quality-poor { color: #a8a29e; }
+        .quality-low { color: #94a3b8; }
+        .quality-sub { color: #cbd5e1; }
+        .quality-mid { color: #e2e8f0; }
+        .quality-fine { color: #34d399; }
+        .quality-good { color: #22d3ee; }
+        .quality-great { color: #a78bfa; }
+        .quality-top { color: #fbbf24; text-shadow: 0 0 6px rgba(251,191,36,0.5); }
+        .nav-tab-active {
+            background-color: #1e293b !important;
+            color: #fbbf24 !important;
+            border-bottom-color: #f59e0b !important;
+        }
+        #customer-active-area.hidden,
+        #deal-action-buttons.hidden {
+            display: none !important;
+        }
+        /* 左欄顧客議價：撐滿與右欄同高，內容放大 */
+        @media (min-width: 1024px) {
+            #view-tab-shop {
+                align-items: stretch;
+            }
+            #customer-panel-card {
+                min-height: 100%;
+            }
+            #customer-active-area {
+                flex: 1 1 auto;
+                display: flex;
+                flex-direction: column;
+            }
+            #cust-dialogue-wrap {
+                flex: 1 1 auto;
+                min-height: 10rem;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 overflow-x-hidden custom-scrollbar">
+
+    <!-- Web Audio API 音效系統 -->
+    <script>
+        class SoundFX {
+            constructor() { this.ctx = null; }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playCoin() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(987.77, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1318.51, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.15);
+            }
+            playBell() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(659.25, this.ctx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.4);
+            }
+            playReject() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.2);
+            }
+            playUpgrade() {
+                if (!this.ctx) return;
+                const notes = [261.63, 329.63, 392.00, 523.25];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.08);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime + idx * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.08 + 0.2);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.08);
+                    osc.stop(this.ctx.currentTime + idx * 0.08 + 0.2);
+                });
+            }
+        }
+        const sfx = new SoundFX();
+    </script>
+
+    <!-- 主頁登入畫面 (HOME SCREEN) -->
+    <div id="screen-home" class="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(180,83,9,0.18)_0,transparent_75%)] pointer-events-none"></div>
+        
+        <div class="max-w-xl w-full bg-slate-900 border-2 border-amber-600/80 rounded-2xl p-8 shadow-2xl relative overflow-hidden backdrop-blur-md text-center z-10">
+            <div class="inline-block p-4 bg-amber-950/60 rounded-full border border-amber-500/40 mb-3 text-amber-400">
+                <i class="fa-solid fa-store text-4xl"></i>
+            </div>
+            
+            <h1 class="text-3xl sm:text-4xl font-black text-amber-400 mb-1 tracking-wider">奇幻道具屋</h1>
+            <p class="text-amber-200/70 text-xs sm:text-sm mb-6">7×7 格子擺設 × 臨櫃管理 × 顧客議價 (分頁導覽版)</p>
+
+            <!-- 帳號綁定資訊 -->
+            <div class="bg-slate-950/90 rounded-xl p-4 border border-slate-700/80 mb-5 text-left">
+                <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider">雲端綁定帳號</span>
+                    <span id="account-status-tag" class="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-700 font-mono">ST / Gmail Ready</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                        <div id="display-current-account" class="text-sm sm:text-base font-mono text-amber-300 truncate font-bold">未綁定 (請輸入帳號)</div>
+                        <div class="text-[11px] text-slate-400">支援 臺中市學生 ST 帳號與 Gmail 雲端自動同步</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 帳號輸入 -->
+            <div class="mb-6 text-left">
+                <label class="block text-xs font-bold text-slate-300 mb-2">
+                    <i class="fa-solid fa-key text-amber-400 mr-1"></i> 請輸入 ST 帳號或 Gmail
+                </label>
+                <div class="flex gap-2">
+                    <input type="text" id="account-input" placeholder="例如: st109001 或 hero@gmail.com" 
+                           class="flex-1 bg-slate-950 border border-slate-700 focus:border-amber-500 focus:outline-none rounded-lg px-3.5 py-2.5 text-slate-100 text-xs sm:text-sm font-mono transition">
+                    <button onclick="saveAndBindAccount()" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs sm:text-sm rounded-lg transition shadow-md flex items-center gap-1.5 whitespace-nowrap">
+                        <i class="fa-solid fa-check"></i> 確定綁定
+                    </button>
+                </div>
+            </div>
+
+            <!-- 主選單按鈕 -->
+            <div class="space-y-3">
+                <button onclick="startGameFromHome(false)" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black text-base sm:text-lg transition shadow-lg shadow-amber-900/30 flex items-center justify-center gap-2 pulse-btn">
+                    <i class="fa-solid fa-play"></i> 開店營業
+                </button>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="fetchCloudDataModal()" class="py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-cloud-arrow-down text-cyan-400"></i> 雲端存檔檢測
+                    </button>
+                    <button onclick="confirmResetGame()" class="py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-rose-950 border border-slate-600 hover:border-rose-700 text-slate-300 hover:text-rose-200 text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-rotate-left text-rose-400"></i> 重設新紀錄
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主遊戲畫面 (GAME SCREEN) -->
+    <div id="screen-game" class="hidden min-h-screen flex flex-col">
+        
+        <!-- 頂部資訊狀態欄 -->
+        <header class="bg-slate-900/95 border-b border-amber-900/40 p-3 sm:p-4 sticky top-0 z-40 backdrop-blur-md shadow-md">
+            <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
+                <div class="flex items-center gap-3">
+                    <button onclick="returnToHome()" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 rounded-lg text-xs transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-house"></i> 主頁
+                    </button>
+                    <div>
+                        <h1 class="text-base sm:text-lg font-black text-amber-400 flex items-center gap-2">
+                            <i class="fa-solid fa-shop"></i> 奇幻道具屋
+                        </h1>
+                        <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                            <span><i class="fa-solid fa-user-circle text-amber-500 mr-1"></i>帳號: <span id="game-account-display" class="font-mono text-amber-300 font-bold">--</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 資源與計數 -->
+                <div class="flex items-center gap-3 sm:gap-6 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">
+                    <div class="text-center">
+                        <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">天數</div>
+                        <div class="text-xs sm:text-base font-black text-slate-100"><i class="fa-regular fa-calendar-days text-cyan-400 mr-1"></i>第 <span id="day-display">1</span> 天</div>
+                    </div>
+                    <div class="h-6 w-px bg-slate-800"></div>
+                    <div class="text-center">
+                        <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">金幣</div>
+                        <div class="text-xs sm:text-base font-black gold-text"><i class="fa-solid fa-coins mr-1"></i><span id="gold-display">300</span> G</div>
+                    </div>
+                    <div class="h-6 w-px bg-slate-800"></div>
+                    <div class="text-center">
+                        <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">今日剩餘顧客</div>
+                        <div class="text-xs sm:text-base font-black text-amber-300"><i class="fa-solid fa-users mr-1"></i><span id="cust-rem-display">5</span> / <span id="cust-max-display">5</span></div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="manualSaveCloud()" class="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> 存檔
+                    </button>
+                    <button onclick="finishDay()" id="next-day-btn" class="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-lg text-xs transition shadow flex items-center gap-1.5">
+                        <i class="fa-solid fa-moon"></i> 打烊結算
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主分頁按導覽列 (NAVIGATION TABS) -->
+        <nav class="bg-slate-900 border-b border-slate-800 sticky top-[65px] z-30">
+            <div class="max-w-7xl mx-auto flex overflow-x-auto custom-scrollbar">
+                <button onclick="switchTab('shop')" id="tab-btn-shop" class="nav-tab-active flex-1 min-w-[120px] py-3 px-4 border-b-2 border-transparent font-bold text-xs sm:text-sm text-slate-400 hover:text-amber-300 transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-store text-base"></i> 商店營業 (顧客/貨架/櫃台)
+                </button>
+                <button onclick="switchTab('reputation')" id="tab-btn-reputation" class="flex-1 min-w-[120px] py-3 px-4 border-b-2 border-transparent font-bold text-xs sm:text-sm text-slate-400 hover:text-amber-300 transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-base"></i> 四大陣營聲望
+                </button>
+                <button onclick="switchTab('upgrades')" id="tab-btn-upgrades" class="flex-1 min-w-[120px] py-3 px-4 border-b-2 border-transparent font-bold text-xs sm:text-sm text-slate-400 hover:text-amber-300 transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-hammer text-base"></i> 店面與擴展升級
+                </button>
+                <button onclick="switchTab('logs')" id="tab-btn-logs" class="flex-1 min-w-[120px] py-3 px-4 border-b-2 border-transparent font-bold text-xs sm:text-sm text-slate-400 hover:text-amber-300 transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-clipboard-list text-base"></i> 經營紀錄與日誌
+                </button>
+            </div>
+        </nav>
+
+        <!-- 內容分頁區域 (TAB CONTENTS) -->
+        <main class="max-w-7xl w-full mx-auto p-4 sm:p-6 flex-1 flex flex-col">
+            
+            <!-- 【分頁 1】：商店營業 (顧客 + 臨櫃櫃台 + 7x7貨架格子) -->
+            <div id="view-tab-shop" class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 lg:items-stretch">
+                
+                <!-- 右側（大螢幕）：7x7 (可擴充) 貨架與臨櫃區 -->
+                <div class="lg:col-span-7 lg:order-2 flex flex-col gap-5">
+                    
+                    <!-- 貨架區域 (加大尺寸，清晰好放) -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2.5">
+                            <div>
+                                <h2 class="text-sm sm:text-base font-black text-amber-400 flex items-center gap-2">
+                                    <i class="fa-solid fa-table-cells text-lg"></i> 陳列貨架背包 (<span id="grid-dim-text" class="text-amber-300">7×7</span>)
+                                </h2>
+                                <p id="placement-hint" class="text-xs text-slate-400 mt-0.5">拖曳櫃台／倉庫物品到格子或櫃台；點擊倉庫物品可偽造品質</p>
+                            </div>
+                            <button onclick="cancelPlacement()" id="btn-cancel-place" class="hidden px-3 py-1 bg-slate-800 text-rose-400 text-xs rounded-lg border border-rose-800 hover:bg-rose-950 font-bold transition">
+                                取消放置
+                            </button>
+                        </div>
+
+                        <!-- 格子 Container -->
+                        <div class="flex justify-center p-3 bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto min-h-[380px] items-center">
+                            <div id="grid-container" class="relative grid gap-1.5 bg-slate-900 p-2.5 rounded-xl border border-slate-800 shadow-inner">
+                                <!-- Dynamic Cells & Items -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 櫃台臨櫃暫存區 (僅能放1天) -->
+                    <div class="bg-slate-900 border border-amber-500/40 rounded-2xl p-4 shadow-xl">
+                        <div class="flex justify-between items-center mb-2 border-b border-slate-800 pb-2">
+                            <h3 class="text-xs sm:text-sm font-bold text-amber-400 flex items-center gap-2">
+                                <i class="fa-solid fa-cash-register text-amber-500"></i> 櫃台臨櫃暫存區
+                            </h3>
+                            <span class="text-xs text-rose-400 font-bold bg-rose-950/80 px-2.5 py-0.5 rounded-full border border-rose-800">
+                                <i class="fa-solid fa-triangle-exclamation mr-1"></i>限放 1 天 (打烊未上架即清空)
+                            </span>
+                        </div>
+
+                        <div id="counter-drop-hint" class="text-[10px] text-cyan-400/90 mb-1 hidden">採購顧客：將符合需求的物品拖到櫃台，可點選多件一起成交</div>
+                        <div id="counter-items-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2 max-h-[220px] overflow-y-auto custom-scrollbar p-1 min-h-[4rem] rounded-lg border border-dashed border-slate-700/80"
+                             ondragover="handleCounterDragOver(event)" ondragleave="handleCounterDragLeave(event)" ondrop="handleCounterDrop(event)">
+                            <!-- Dynamic Counter Items -->
+                        </div>
+                    </div>
+
+                    </div>
+
+                <!-- 左側（大螢幕）：顧客接待與議價區域（撐滿欄高） -->
+                <div class="lg:col-span-5 lg:order-1 flex flex-col min-h-0 h-full">
+                    <div id="customer-panel-card" class="bg-slate-900 border-2 border-amber-600/70 rounded-2xl p-5 sm:p-6 lg:p-7 shadow-2xl relative flex flex-col flex-1 h-full">
+                        
+                        <!-- 有顧客上門時 -->
+                        <div id="customer-active-area" class="flex flex-col flex-1 min-h-0">
+                            <div class="flex justify-between items-start mb-5 lg:mb-6">
+                                <div class="flex items-center gap-4">
+                                    <div id="cust-avatar-box" class="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl bg-slate-800 border-2 border-amber-500 flex items-center justify-center text-2xl lg:text-3xl text-amber-400 shadow-lg shrink-0">
+                                        <i id="cust-icon" class="fa-solid fa-user"></i>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <h3 id="cust-name" class="font-bold text-base sm:text-lg lg:text-xl text-slate-100">來訪顧客</h3>
+                                            <span id="cust-faction-badge" class="px-3 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">陣營</span>
+                                        </div>
+                                        <div class="text-sm text-slate-400 flex items-center gap-2 mt-1">
+                                            <span>性格: <strong id="cust-trait" class="text-amber-300">豪爽</strong></span>
+                                            <span>•</span>
+                                            <span id="cust-intent" class="text-cyan-300 font-semibold">來兜售物品</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="text-right shrink-0 ml-2">
+                                    <div class="text-xs text-slate-400 mb-1.5 font-bold">談判耐心</div>
+                                    <div class="w-24 lg:w-28 bg-slate-950 rounded-full h-2.5 border border-slate-800 overflow-hidden">
+                                        <div id="cust-patience-bar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 100%"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 對話框（大螢幕自動拉高填滿） -->
+                            <div id="cust-dialogue-wrap" class="bg-slate-950 border border-slate-800 rounded-xl p-4 lg:p-5 mb-5 relative flex items-start">
+                                <p id="cust-dialogue" class="text-sm sm:text-base lg:text-lg text-amber-100/90 leading-relaxed italic">
+                                    「老闆！開個合適的價錢收了吧！」
+                                </p>
+                            </div>
+
+                            <!-- 交易商品資訊卡片 -->
+                            <div id="deal-item-card" class="bg-slate-950 rounded-xl p-4 lg:p-5 border border-amber-900/40 flex items-center justify-between mb-5 shadow-inner">
+                                <div class="flex items-center gap-4 min-w-0">
+                                    <div id="item-icon-box" class="w-12 h-12 lg:w-14 lg:h-14 rounded-lg bg-amber-950/40 border border-amber-700/50 flex items-center justify-center text-amber-400 font-bold text-xl lg:text-2xl shrink-0">
+                                        <i class="fa-solid fa-gem"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div id="item-title" class="text-base lg:text-lg font-bold text-amber-200 truncate">魔法晶石</div>
+                                        <div class="text-sm text-slate-400">尺寸: <span id="item-size-tag" class="text-amber-400 font-bold">1×1</span> | <span id="item-rarity">—</span></div>
+                                        <div id="item-quality-line" class="text-xs mt-0.5 text-slate-400 hidden"></div>
+                                    </div>
+                                </div>
+                                <div class="text-right shrink-0 pl-3">
+                                    <div id="deal-price-label" class="text-xs text-slate-400">對方底價</div>
+                                    <div class="text-lg lg:text-xl font-black gold-text"><span id="deal-target-price">120</span> G</div>
+                                </div>
+                            </div>
+
+                            <div id="seller-bundle-list" class="hidden max-h-64 overflow-y-auto space-y-2 mb-4"></div>
+
+                            <!-- 出價輸入與快捷出價 -->
+                            <div id="offer-price-controls" class="space-y-3 bg-slate-950/60 p-4 lg:p-5 rounded-xl border border-slate-800/80 mb-5">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm lg:text-base text-slate-300 font-bold whitespace-nowrap">你的出價:</span>
+                                    <input type="number" id="offer-price-input" class="flex-1 bg-slate-950 border border-slate-700 focus:border-amber-500 focus:outline-none rounded-lg px-4 py-2.5 lg:py-3 text-base lg:text-lg text-amber-300 font-bold font-mono">
+                                    <span class="text-sm gold-text font-bold">G</span>
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-2.5">
+                                    <button onclick="quickOffer(0.8)" class="py-2 lg:py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm rounded-lg border border-slate-700 font-bold">80% 出價</button>
+                                    <button onclick="quickOffer(1.0)" class="py-2 lg:py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm rounded-lg border border-slate-700 font-bold">100% 原價</button>
+                                    <button onclick="quickOffer(1.2)" class="py-2 lg:py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm rounded-lg border border-slate-700 font-bold">120% 溢價</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 無顧客狀態 -->
+                        <div id="no-customer-area" class="hidden text-center py-10 flex-1 flex flex-col items-center justify-center">
+                            <i class="fa-solid fa-store-slash text-5xl lg:text-6xl text-slate-700 mb-4"></i>
+                            <p id="no-cust-reason" class="text-base lg:text-lg text-slate-400 font-bold">目前店內沒有顧客...</p>
+                            <button onclick="nextCustomer()" id="btn-next-cust" class="mt-6 px-8 py-3 bg-amber-600 hover:bg-amber-500 text-slate-950 font-black rounded-xl text-base shadow-lg transition">
+                                <i class="fa-solid fa-bell mr-1.5"></i> 迎接下一位顧客
+                            </button>
+                        </div>
+
+                        <!-- 交易動作按鈕 -->
+                        <div id="deal-action-buttons" class="grid grid-cols-2 gap-3 pt-4 mt-auto border-t border-slate-800">
+                            <button onclick="submitDeal('negotiate')" class="py-3.5 lg:py-4 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black rounded-xl text-sm sm:text-base transition shadow-lg">
+                                確認出價／成交
+                            </button>
+                            <button onclick="submitDeal('reject')" class="py-3.5 lg:py-4 bg-rose-700 hover:bg-rose-600 text-slate-100 font-bold rounded-xl text-sm sm:text-base transition shadow-lg">
+                                謝絕
+                            </button>
+                        </div>
+                        <div id="landlord-rent-actions" class="hidden space-y-2 pt-4 mt-auto border-t border-slate-800"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 【分頁 2】：陣營聲望 (專屬畫面) -->
+            <div id="view-tab-reputation" class="hidden space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <h2 class="text-lg font-bold text-amber-400 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-shield-halved"></i> 四大陣營聲望與影響力
+                    </h2>
+                    <p class="text-xs text-slate-400 mb-6">每 +5 聲望，該陣營每日顧客 +1 位、預算 +10%；每 -5 聲望，顧客 -1 位、預算 -5%。顧客數效果最多 ±2 位。</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- 平民 -->
+                        <div class="bg-slate-950 rounded-xl p-5 border border-slate-800 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-emerald-400 font-black text-base flex items-center gap-2">
+                                        <i class="fa-solid fa-wheat-awn text-xl"></i> 平民聲望 (Folk)
+                                    </span>
+                                    <span id="rep-folk-val" class="font-mono text-sm font-bold text-slate-200">0.00 / ±100</span>
+                                </div>
+                                <div class="relative w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-800 mb-3">
+                                    <div class="absolute left-1/2 top-0 h-full border-l border-slate-500/70"></div>
+                                    <div id="rep-folk-bar" class="absolute top-0 h-full bg-emerald-500 transition-all duration-300" style="left: 50%; width: 0%"></div>
+                                </div>
+                                <p class="text-xs text-slate-400 leading-relaxed">日常生活用品、小麥、藥草與民俗手工藝的主要供應者。</p>
+                                <p id="rep-folk-effect" class="text-xs text-emerald-300 mt-2"></p>
+                            </div>
+                        </div>
+
+                        <!-- 冒險者公會 -->
+                        <div class="bg-slate-950 rounded-xl p-5 border border-slate-800 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-cyan-400 font-black text-base flex items-center gap-2">
+                                        <i class="fa-solid fa-khanda text-xl"></i> 冒險者公會 (Guild)
+                                    </span>
+                                    <span id="rep-guild-val" class="font-mono text-sm font-bold text-slate-200">0.00 / ±100</span>
+                                </div>
+                                <div class="relative w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-800 mb-3">
+                                    <div class="absolute left-1/2 top-0 h-full border-l border-slate-500/70"></div>
+                                    <div id="rep-guild-bar" class="absolute top-0 h-full bg-cyan-500 transition-all duration-300" style="left: 50%; width: 0%"></div>
+                                </div>
+                                <p class="text-xs text-slate-400 leading-relaxed">帶來討伐戰利品、魔物器官、精鍛兵器與稀有礦石。</p>
+                                <p id="rep-guild-effect" class="text-xs text-cyan-300 mt-2"></p>
+                            </div>
+                        </div>
+
+                        <!-- 貴族王室 -->
+                        <div class="bg-slate-950 rounded-xl p-5 border border-slate-800 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-amber-300 font-black text-base flex items-center gap-2">
+                                        <i class="fa-solid fa-crown text-xl"></i> 貴族王室 (Noble)
+                                    </span>
+                                    <span id="rep-noble-val" class="font-mono text-sm font-bold text-slate-200">0.00 / ±100</span>
+                                </div>
+                                <div class="relative w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-800 mb-3">
+                                    <div class="absolute left-1/2 top-0 h-full border-l border-slate-500/70"></div>
+                                    <div id="rep-noble-bar" class="absolute top-0 h-full bg-amber-400 transition-all duration-300" style="left: 50%; width: 0%"></div>
+                                </div>
+                                <p class="text-xs text-slate-400 leading-relaxed">買賣高單價奢侈品、宮廷畫作、純金飾品，出手極其豪爽。</p>
+                                <p id="rep-noble-effect" class="text-xs text-amber-300 mt-2"></p>
+                            </div>
+                        </div>
+
+                        <!-- 黑市暗影 -->
+                        <div class="bg-slate-950 rounded-xl p-5 border border-slate-800 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-purple-400 font-black text-base flex items-center gap-2">
+                                        <i class="fa-solid fa-mask text-xl"></i> 黑市暗影 (Underworld)
+                                    </span>
+                                    <span id="rep-underworld-val" class="font-mono text-sm font-bold text-slate-200">0.00 / ±100</span>
+                                </div>
+                                <div class="relative w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-800 mb-3">
+                                    <div class="absolute left-1/2 top-0 h-full border-l border-slate-500/70"></div>
+                                    <div id="rep-underworld-bar" class="absolute top-0 h-full bg-purple-500 transition-all duration-300" style="left: 50%; width: 0%"></div>
+                                </div>
+                                <p class="text-xs text-slate-400 leading-relaxed">流通詛咒道具、古老古董與禁忌物品，利潤極高但風險大。</p>
+                                <p id="rep-underworld-effect" class="text-xs text-purple-300 mt-2"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 【分頁 3】：店面擴展升級 (專屬畫面) -->
+            <div id="view-tab-upgrades" class="hidden space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <h2 class="text-lg font-bold text-amber-400 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-hammer"></i> 店面擴增與專業升級
+                    </h2>
+                    <p class="text-xs text-slate-400 mb-6">投資利潤擴建陳列背包格子或吸引更多顧客上門！</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- 升級 1：背包格子 -->
+                        <div class="bg-slate-950 rounded-2xl p-5 border border-slate-800 flex flex-col justify-between relative overflow-hidden">
+                            <div>
+                                <div class="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-xl flex items-center justify-center text-2xl mb-4 border border-amber-500/30">
+                                    <i class="fa-solid fa-table-cells"></i>
+                                </div>
+                                <h3 class="font-bold text-base text-slate-100 mb-1">貨架背包擴充</h3>
+                                <p class="text-xs text-slate-400 mb-4">擴大陳列貨架尺寸 (初始 7×7 ➔ 最高 15×15)，放置更多大型商品。</p>
+                                <div class="text-xs text-amber-300 font-bold mb-4">
+                                    當前等級: Lv <span id="upg-grid-lv">1</span> (<span id="upg-grid-dim">7×7</span>)
+                                </div>
+                            </div>
+                            <button id="btn-upg-grid" onclick="buyUpgrade('grid')" class="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-xl text-sm transition shadow-lg flex justify-center items-center gap-1.5">
+                                升級 (<span id="cost-upg-grid">300</span> G)
+                            </button>
+                        </div>
+
+                        <!-- 升級 2：每日客流 -->
+                        <div class="bg-slate-950 rounded-2xl p-5 border border-slate-800 flex flex-col justify-between relative overflow-hidden">
+                            <div>
+                                <div class="w-12 h-12 bg-cyan-500/10 text-cyan-400 rounded-xl flex items-center justify-center text-2xl mb-4 border border-cyan-500/30">
+                                    <i class="fa-solid fa-users"></i>
+                                </div>
+                                <h3 class="font-bold text-base text-slate-100 mb-1">每日客流上限</h3>
+                                <p class="text-xs text-slate-400 mb-4">發放宣傳單，增加每日上門顧客人數 (初始 5 位 ➔ 最高 10 位)。</p>
+                                <div class="text-xs text-cyan-300 font-bold mb-4">
+                                    當前等級: Lv <span id="upg-cust-lv">1</span> (<span id="upg-cust-max">5</span> 位/天)
+                                </div>
+                            </div>
+                            <button onclick="buyUpgrade('cust')" class="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-xl text-sm transition shadow-lg flex justify-center items-center gap-1.5">
+                                升級 (<span id="cost-upg-cust">250</span> G)
+                            </button>
+                        </div>
+
+                        <!-- 升級 3：談判技巧 -->
+                        <div class="bg-slate-950 rounded-2xl p-5 border border-slate-800 flex flex-col justify-between relative overflow-hidden">
+                            <div>
+                                <div class="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-xl flex items-center justify-center text-2xl mb-4 border border-purple-500/30">
+                                    <i class="fa-solid fa-comments"></i>
+                                </div>
+                                <h3 class="font-bold text-base text-slate-100 mb-1">談判技巧</h3>
+                                <p class="text-xs text-slate-400 mb-4">提升口才，大幅降低講價時顧客扣減的談判耐心值。</p>
+                                <div class="text-xs text-purple-300 font-bold mb-4">
+                                    當前等級: Lv <span id="upg-talk-lv">1</span>
+                                </div>
+                            </div>
+                            <button onclick="buyUpgrade('talk')" class="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-xl text-sm transition shadow-lg flex justify-center items-center gap-1.5">
+                                升級 (<span id="cost-upg-talk">150</span> G)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 【分頁 4】：經營日誌與統計 (專屬畫面) -->
+            <div id="view-tab-logs" class="hidden space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <h2 class="text-lg font-bold text-amber-400 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-clipboard-list"></i> 店鋪經營事件日誌
+                    </h2>
+                    <p class="text-xs text-slate-400 mb-4">詳細記載店鋪每日交易、買賣紀錄與打烊異動。</p>
+
+                    <div id="game-log-box" class="h-96 bg-slate-950 rounded-xl p-4 border border-slate-800 font-mono text-xs overflow-y-auto space-y-2 custom-scrollbar text-slate-300">
+                        <div class="text-slate-500">[系統] 奇幻道具屋系統準備就緒...</div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- 貨架商品操作彈窗 Modal -->
+    <div id="modal-item-op" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="max-w-sm w-full bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h3 id="modal-item-name" class="text-base font-bold text-amber-400 mb-1">物品名稱</h3>
+            <p id="modal-item-desc" class="text-xs text-slate-400 mb-2">尺寸: 1x2</p>
+            <p id="modal-item-price-display" class="text-sm gold-text font-black mb-3">售價: — G</p>
+            <p id="modal-item-true-quality" class="text-xs text-slate-300 mb-4">實際品質: 中品</p>
+            <div id="modal-functional-actions" class="hidden space-y-2 mb-4"></div>
+
+            <div class="space-y-2 mb-4">
+                <label class="block text-xs font-bold text-slate-300">偽造對外標示品質（售價依標示品質計算）:</label>
+                <select id="modal-forge-quality" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-amber-300"></select>
+                <p class="text-[10px] text-slate-500 leading-relaxed">差距越小、顧客身分越低、需求越急，越不易被識破；識破時扣該陣營聲望。</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mb-2.5">
+                <button onclick="applyForgeQualityModal()" class="py-2 bg-purple-700 hover:bg-purple-600 text-slate-100 font-bold rounded-lg text-xs transition">
+                    套用偽造標示
+                </button>
+                <button onclick="resetForgeQualityModal()" class="py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg text-xs transition">
+                    還原真實品質
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-2.5">
+                <button onclick="moveGridItemToCounter()" class="py-2 bg-cyan-700 hover:bg-cyan-600 text-slate-100 font-bold rounded-lg text-xs transition">
+                    移回櫃台
+                </button>
+                <button onclick="discardGridItem()" class="py-2 bg-rose-900 hover:bg-rose-800 text-rose-200 font-bold rounded-lg text-xs transition">
+                    丟棄物品
+                </button>
+            </div>
+            <button onclick="closeItemOpModal()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg text-xs transition">
+                關閉
+            </button>
+        </div>
+    </div>
+
+    <!-- 每日結算彈窗 Modal -->
+    <div id="modal-settlement" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border-2 border-amber-600 rounded-2xl p-6 shadow-2xl text-center">
+            <div class="w-14 h-14 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl border border-amber-500/40">
+                <i class="fa-solid fa-moon"></i>
+            </div>
+            <h2 class="text-xl font-black text-amber-400 mb-1">本日營業打烊結算</h2>
+            <p class="text-xs text-slate-400 mb-5">第 <span id="settle-day-num">1</span> 天經營成果報告</p>
+
+            <div class="bg-slate-950 rounded-xl p-4 border border-slate-800 space-y-2.5 text-xs text-left mb-5">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">接待顧客總數:</span>
+                    <span id="settle-cust-count" class="font-bold text-slate-200">0 位</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">成功交易筆數:</span>
+                    <span id="settle-deals-count" class="font-bold text-emerald-400">0 筆</span>
+                </div>
+                <div id="settle-counter-discard-row" class="flex justify-between hidden">
+                    <span class="text-rose-400 font-bold">櫃台未上架報廢:</span>
+                    <span id="settle-counter-discard-count" class="font-bold text-rose-400">0 件</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">本日房租:</span>
+                    <span id="settle-rent-cost" class="font-bold text-slate-400">本日不收租</span>
+                </div>
+                <div class="border-t border-slate-800 pt-2.5 flex justify-between text-sm">
+                    <span class="font-bold text-slate-200">結算後金幣:</span>
+                    <span id="settle-net-gold" class="font-black gold-text">300 G</span>
+                </div>
+            </div>
+
+            <button onclick="beginOuting()" class="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-xl text-sm transition shadow-lg">
+                外出活動／前往下一天 <i class="fa-solid fa-sun ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="modal-outing" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
+        <div class="max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-slate-900 border-2 border-cyan-700/70 rounded-2xl p-6 shadow-2xl">
+            <h2 class="text-xl font-black text-cyan-300 mb-2"><i class="fa-solid fa-map-location-dot mr-2"></i>打烊後外出</h2>
+            <p id="outing-description" class="text-xs text-slate-400 mb-5">選擇一個地點與行動；完成後將開始新的一天。</p>
+            <div id="outing-destinations" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+            <div id="outing-shop-content" class="hidden mt-4"></div>
+            <button onclick="finishOuting()" class="w-full mt-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg text-sm">
+                結束外出並開始新的一天
+            </button>
+        </div>
+    </div>
+
+    <!-- 雲端檢測 Modal -->
+    <div id="modal-cloud" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl">
+            <h3 class="text-base font-bold text-amber-400 mb-2 flex items-center gap-2">
+                <i class="fa-solid fa-cloud"></i> Firebase 雲端存檔檢測
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">檢測帳號: <span id="modal-cloud-acc" class="text-amber-300 font-mono font-bold">--</span></p>
+            
+            <div id="modal-cloud-status" class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono mb-5 text-slate-300 leading-relaxed min-h-[90px] flex items-center justify-center">
+                檢測中...
+            </div>
+
+            <div class="flex gap-2.5">
+                <button onclick="fetchCloudSave()" class="flex-1 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-xl text-xs transition">
+                    線上拉取進度
+                </button>
+                <button onclick="closeCloudModal()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition">
+                    關閉
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 核心 JS 邏輯 -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTYIxFK1hno76GNNrXZoqvqlvU_Pm6jVQ",
+            authDomain: "towerdefense-save.firebaseapp.com",
+            projectId: "towerdefense-save",
+            storageBucket: "towerdefense-save.firebasestorage.app",
+            messagingSenderId: "507422966076",
+            appId: "1:507422966076:web:986f6aae8bf4eb672d9e39"
+        };
+
+        let db = null;
+        try {
+            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+        } catch (e) { console.warn("Firebase Init Issue:", e); }
+
+        const DEFAULT_STATE = {
+            account: "",
+            day: 1,
+            gold: 300,
+            gridRows: 7,
+            gridCols: 7,
+            maxCustomers: 5,
+            customersRemaining: 5,
+            upgrades: { grid: 1, cust: 1, talk: 1 },
+            reputationVersion: 2,
+            reputations: { folk: 0, guild: 0, noble: 0, underworld: 0 },
+            customerFactionQueue: [],
+            unlockedCamps: [],
+            unlockedShopAddresses: [],
+            metShopOwners: [],
+            professions: [],
+            ownedWaterTools: [],
+            ownedWaterComponents: [],
+            packagingMachine: { packageItem: null, contents: [] },
+            rentAmount: 300,
+            rentArrears: 0,
+            campIntel: {},
+            waterProduction: { day: 1, makerUses: 0, faucetPoorUses: 0 },
+            gridItems: [
+                { id: 101, name: "優質藥草", category: "folk", rarity: "普通", baseValue: 30, icon: "fa-leaf", w: 1, h: 1, r: 0, c: 0, quality: "good", labelQuality: "good", tags: ["medicine", "herb", "folk"] },
+                { id: 102, name: "精鍛鐵劍", category: "guild", rarity: "稀有", baseValue: 120, icon: "fa-shield-halved", w: 1, h: 2, r: 1, c: 0, quality: "fine", labelQuality: "fine", tags: ["sword", "weapon", "guild"] }
+            ],
+            counterItems: [
+                { id: 201, name: "黑橡木短杖", category: "folk", rarity: "普通", baseValue: 40, icon: "fa-wand-magic", w: 1, h: 2, quality: "mid", labelQuality: "mid", tags: ["staff", "magic", "folk"] }
+            ],
+            dailyStats: { customersToday: 0, dealsToday: 0 }
+        };
+
+        let gameState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+        let currentCustomer = null;
+        let selectedCounterItemId = null;
+        let selectedOfferItemIds = [];
+        let selectedSellerItemIds = [];
+        let activeGridItemOpId = null;
+        let dragPayload = null;
+        let customerResolutionPending = false;
+
+        const QUALITY_KEYS = ['junk', 'poor', 'low', 'sub', 'mid', 'fine', 'good', 'great', 'top'];
+        const QUALITY_LABELS = {
+            junk: '廢品', poor: '劣品', low: '下品', sub: '次品', mid: '中品',
+            fine: '上品', good: '佳品', great: '優品', top: '頂品'
+        };
+        const QUALITY_MULT = {
+            junk: -0.5, poor: -0.3, low: -0.15, sub: -0.05, mid: 0,
+            fine: 0.2, good: 0.5, great: 1.0, top: 3.0
+        };
+        const WATER_LABELS = {
+            fakeImmortal: '偽仙品',
+            immortal: '仙品',
+            sacred: '聖品'
+        };
+        const WATER_CONTAMINANTS = [
+            { id: 'sediment', name: '泥沙' },
+            { id: 'salt', name: '鹽分' },
+            { id: 'organic', name: '有機物' }
+        ];
+
+        const FACTION_DETECT_MOD = { folk: 0.55, guild: 0.75, noble: 1.0, underworld: 0.85 };
+        const TRAIT_URGENCY_MOD = { '急用': 0.45, '豪爽': 0.75, '嚴謹': 1.15, '貪婪': 0.95, '收藏家': 1.05 };
+
+        const CUSTOMER_REQUESTS = [
+            { kind: 'tag', tag: 'sword', label: '劍類', phrases: ['我需要一把像樣的劍', '有劍嗎？急著用！', '想找把劍防身'] },
+            { kind: 'tag', tag: 'medicine', label: '藥品', phrases: ['有沒有治療用的藥', '我需要藥草或藥劑', '傷員等著要藥'] },
+            { kind: 'tag', tag: 'food', label: '食糧', phrases: ['想買些糧食', '有沒有能填飽肚子的', '需要民生食品'] },
+            { kind: 'tag', tag: 'water', label: '飲用水', phrases: ['我需要飲用水', '能裝一杯水嗎？', '有乾淨的水嗎？'] },
+            { kind: 'tag', tag: 'functional', label: '功能道具', phrases: ['我在找實用的功能道具', '有特殊用途的器具嗎？', '想買能幫上忙的設備'] },
+            { kind: 'tag', tag: 'armor', label: '防具', phrases: ['我需要護具或盔甲', '有防具嗎？', '想買能擋刀的裝備'] },
+            { kind: 'tag', tag: 'weapon', label: '武器', phrases: ['任意武器都行', '我需要武器，不限種類', '有武器就拿出來'] },
+            { kind: 'category', category: 'guild', label: '冒險者裝備', phrases: ['有冒險者用的東西嗎', '公會裝備類都可以', '我要冒險者那一類的貨'] },
+            { kind: 'category', category: 'folk', label: '民生雜貨', phrases: ['平民用的日常用品', '民生類的都可以', '店裡有民俗雜貨嗎'] },
+            { kind: 'category', category: 'noble', label: '貴族珍品', phrases: ['有高雅一點的貨嗎', '貴族喜歡的類型', '奢侈品、精品都可以'] },
+            { kind: 'category', category: 'underworld', label: '黑市貨', phrases: ['我來找些…特殊的', '黑市流通的那類', '禁忌或暗影貨物都行'] }
+        ];
+
+        const ITEM_DATABASE = [
+            { name: "新鮮小麥粉", category: "folk", rarity: "普通", baseValue: 15, icon: "fa-wheat-awn", w: 1, h: 1, tags: ["food", "folk"] },
+            { name: "黑橡木短杖", category: "folk", rarity: "普通", baseValue: 40, icon: "fa-wand-magic", w: 1, h: 2, tags: ["staff", "magic", "folk"] },
+            { name: "醃製山豬肉", category: "folk", rarity: "普通", baseValue: 25, icon: "fa-drumstick-bite", w: 2, h: 1, tags: ["food", "folk"] },
+            { name: "哥布林長槍", category: "guild", rarity: "普通", baseValue: 35, icon: "fa-spaghetti-monster-flying", w: 1, h: 3, tags: ["spear", "weapon", "guild"] },
+            { name: "精鍛長劍", category: "guild", rarity: "稀有", baseValue: 95, icon: "fa-khanda", w: 1, h: 3, tags: ["sword", "weapon", "guild"] },
+            { name: "水晶魔石碎片", category: "guild", rarity: "稀有", baseValue: 80, icon: "fa-gem", w: 1, h: 1, tags: ["magic", "guild"] },
+            { name: "雙頭蛇毒液瓶", category: "guild", rarity: "稀有", baseValue: 130, icon: "fa-flask", w: 1, h: 2, tags: ["medicine", "potion", "guild"] },
+            { name: "龍鱗重型護甲", category: "guild", rarity: "史詩", baseValue: 350, icon: "fa-shield-cat", w: 2, h: 2, tags: ["armor", "guild"] },
+            { name: "宮廷刺繡手巾", category: "noble", rarity: "稀有", baseValue: 160, icon: "fa-scroll", w: 2, h: 1, tags: ["luxury", "noble"] },
+            { name: "古代貴族酒壺", category: "noble", rarity: "史詩", baseValue: 400, icon: "fa-wine-glass-empty", w: 1, h: 2, tags: ["luxury", "noble"] },
+            { name: "純金大皇冠", category: "noble", rarity: "傳說", baseValue: 900, icon: "fa-award", w: 2, h: 2, tags: ["luxury", "noble"] },
+            { name: "詛咒的骨灰甕", category: "underworld", rarity: "史詩", baseValue: 280, icon: "fa-skull", w: 2, h: 2, tags: ["underworld", "magic"] },
+            { name: "黑市私售麻醉粉", category: "underworld", rarity: "稀有", baseValue: 150, icon: "fa-capsules", w: 1, h: 1, tags: ["medicine", "underworld"] },
+            { name: "攻城巨型戰鎚", category: "guild", rarity: "傳說", baseValue: 600, icon: "fa-hammer", w: 2, h: 3, tags: ["weapon", "guild"] },
+            { name: "優質藥草", category: "folk", rarity: "普通", baseValue: 30, icon: "fa-leaf", w: 1, h: 1, tags: ["medicine", "herb", "folk"] }
+        ];
+
+        const SHOP_OWNER_VISITORS = [
+            {
+                id: 'tool-shop',
+                shopName: '行旅道具商店',
+                name: '旅行道具商人',
+                faction: 'folk',
+                item: { name: '耐用濾水壺', category: 'folk', rarity: '普通', baseValue: 20, icon: 'fa-filter', w: 1, h: 1, tags: ['tool', 'folk'] }
+            },
+            {
+                id: 'profession-shop',
+                shopName: '百業手則商店',
+                name: '職業手則商人',
+                faction: 'guild',
+                item: { name: '水商入門手冊', category: 'guild', rarity: '普通', baseValue: 20, icon: 'fa-book', w: 1, h: 1, tags: ['manual', 'guild'] }
+            },
+            {
+                id: 'component-shop',
+                shopName: '店面部件商店',
+                name: '店面部件商人',
+                faction: 'noble',
+                item: { name: '黃銅水龍頭樣品', category: 'noble', rarity: '普通', baseValue: 20, icon: 'fa-faucet', w: 1, h: 1, tags: ['component', 'noble'] }
+            }
+        ];
+
+        const MAINLINE_CAMPS = {
+            guild: { name: '冒險者會長營地', theme: '守護王國與城鎮' },
+            noble: { name: '貴族之首營地', theme: '貴族叛變' },
+            underworld: { name: '黑幫幫主營地', theme: '黑幫佔領' },
+            folk: { name: '平民營地', theme: '平民代表逐步崛起、反抗王國' }
+        };
+
+        const SHOP_CATALOG = {
+            'tool-shop': [
+                { id: 'cup', name: '空杯', price: 5, icon: 'fa-glass-water', description: '放上貨架後可拖至水源裝水。' },
+                { id: 'water-maker', name: '造水機', price: 2400, icon: 'fa-faucet-drip', profession: 'waterMerchant', description: '大型功能道具：每日可手動接 3 杯佳品水（魔力 20）。', functional: true, w: 2, h: 2 },
+                { id: 'purifier', name: '淨水器', price: 180, icon: 'fa-filter', profession: 'waterMerchant', description: '大型功能道具：3 格容量，放入水後隔日完成過濾。', functional: true, w: 2, h: 2 },
+                { id: 'filter-salt', name: '鹽分濾芯', price: 70, icon: 'fa-filter-circle-dollar', description: '放入淨水器以增加鹽分過濾能力。', consumable: 'filter-salt' },
+                { id: 'filter-organic', name: '有機物濾芯', price: 90, icon: 'fa-leaf', description: '放入淨水器以增加有機物過濾能力。', consumable: 'filter-organic' },
+                { id: 'mana-pool', name: '微型魔力池', price: 2200, icon: 'fa-wand-sparkles', profession: 'waterMerchant', description: '大型功能道具：3 格容量；每杯水增加 10 魔力。', functional: true, w: 2, h: 2 },
+                { id: 'compressor', name: '聚魔機', price: 5000, icon: 'fa-compress', profession: 'waterMerchant', description: '大型功能道具：3 格容量；100 魔力轉 0.1 仙力，初始耐久 20。', functional: true, w: 2, h: 2 },
+                { id: 'packaging-machine', name: '道具包裝機', price: 1200, icon: 'fa-boxes-stacked', description: '大型功能道具：先放包裝，再放入最多 10 件對應物品。', functional: true, w: 2, h: 2 },
+                { id: 'cup-package', name: '杯子包裝', price: 30, icon: 'fa-box', description: '1×3 包裝，可裝最多 10 個空杯。', packagingSupply: 'cup', w: 1, h: 3 },
+                { id: 'pill-package', name: '藥丸包裝', price: 50, icon: 'fa-box-open', description: '1×3 包裝，可裝最多 10 顆藥丸。', packagingSupply: 'pill', w: 1, h: 3 },
+                { id: 'purify-pill', name: '淨水藥丸', price: 12, icon: 'fa-capsules', description: '一次性淨化一種污染物。' },
+                { id: 'mana-pill', name: '魔力藥丸', price: 180, icon: 'fa-tablets', description: '一次性增加 5 點魔力。' }
+            ],
+            'profession-shop': [
+                { id: 'water-manual', name: '水商手則', price: 2000, icon: 'fa-book-open', description: '取得水商職業，解鎖水商器具購買資格。' }
+            ],
+            'component-shop': [
+                { id: 'faucet', name: '水龍頭', price: 80, icon: 'fa-faucet', description: '功能道具：可放在貨架使用；每日前 5 杯劣品，其後為廢品。', functional: true, w: 2, h: 1 }
+            ]
+        };
+
+        function qualityIndex(q) {
+            const i = QUALITY_KEYS.indexOf(q || 'mid');
+            return i >= 0 ? i : QUALITY_KEYS.indexOf('mid');
+        }
+
+        function rollRandomQuality() {
+            const weights = [3, 5, 8, 10, 28, 18, 14, 10, 4];
+            let sum = weights.reduce((a, b) => a + b, 0);
+            let r = Math.random() * sum;
+            for (let i = 0; i < QUALITY_KEYS.length; i++) {
+                r -= weights[i];
+                if (r <= 0) return QUALITY_KEYS[i];
+            }
+            return 'mid';
+        }
+
+        function ensureItemFields(item) {
+            if (!item.tags || !item.tags.length) item.tags = inferTags(item);
+            if (!item.quality) item.quality = 'mid';
+            if (!item.labelQuality) item.labelQuality = item.quality;
+            if (!Number.isFinite(Number(item.priceMultiplier)) || Number(item.priceMultiplier) <= 0) item.priceMultiplier = 1;
+            if (item.water) {
+                updateWaterQuality(item);
+            } else if (Array.isArray(item.packageContents)) {
+                item.price = Math.max(1, Math.round(item.packageContents.reduce((total, content) =>
+                    total + (Number(content.price) || computeItemPrice(content)), Number(item.packagingCost) || 0) * 0.95));
+            } else {
+                item.price = computeItemPrice(item);
+            }
+            return item;
+        }
+
+        function inferTags(item) {
+            const n = (item.name || '').toLowerCase();
+            const tags = new Set([item.category]);
+            if (/劍|sword|khanda/.test(item.name)) tags.add('sword'), tags.add('weapon');
+            if (/槍|spear|錘|hammer|武器/.test(item.name)) tags.add('weapon');
+            if (/藥|herb|leaf|flask|capsules|毒/.test(item.name)) tags.add('medicine');
+            if (/小麥|肉|food|糧/.test(item.name)) tags.add('food');
+            if (/護|甲|armor|shield/.test(item.name)) tags.add('armor');
+            if (/杖|staff|magic|魔|gem/.test(item.name)) tags.add('magic');
+            if (item.category === 'noble') tags.add('luxury');
+            if (item.category === 'underworld') tags.add('underworld');
+            return [...tags];
+        }
+
+        function computeItemPrice(item) {
+            const q = item.labelQuality || item.quality || 'mid';
+            const mult = QUALITY_MULT[q] ?? 0;
+            return Math.max(1, Math.round(item.baseValue * (1 + mult) * (Number(item.priceMultiplier) || 1)));
+        }
+
+        function createWaterItem(source, impurity = 0, magic = 0) {
+            const weights = WATER_CONTAMINANTS.map(() => Math.random());
+            const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+            const contaminants = Object.fromEntries(WATER_CONTAMINANTS.map((type, index) => [
+                type.id,
+                impurity * weights[index] / totalWeight
+            ]));
+            const item = {
+                id: Date.now() + Math.floor(Math.random() * 100000),
+                water: true,
+                name: '水杯',
+                category: 'folk',
+                rarity: '—',
+                baseValue: 10,
+                icon: 'fa-glass-water',
+                w: 1,
+                h: 1,
+                r: null,
+                c: null,
+                tags: ['water', 'folk'],
+                quality: 'mid',
+                labelQuality: 'mid',
+                impurities: contaminants,
+                magic: Math.max(0, magic),
+                immortalQi: 0,
+                source
+            };
+            ensureItemFields(item);
+            return item;
+        }
+
+        function getWaterImpurity(item) {
+            return Object.values(item.impurities || {}).reduce((sum, amount) => sum + Math.max(0, Number(amount) || 0), 0);
+        }
+
+        function updateWaterQuality(item) {
+            const impurity = getWaterImpurity(item);
+            let immortalQi = Math.max(0, Number(item.immortalQi) || 0);
+            let magic = Math.max(0, Number(item.magic) || 0);
+            if (impurity > 0) {
+                magic = 0;
+            } else if (immortalQi > 0 && magic > 0) {
+                immortalQi += magic / 100 * 0.1;
+                magic = 0;
+            }
+            item.immortalQi = immortalQi;
+            item.magic = magic;
+            let grade;
+
+            if (impurity > 10) grade = 'junk';
+            else if (impurity > 5) grade = 'poor';
+            else if (impurity > 0.1) grade = 'low';
+            else if (impurity > 0) grade = 'sub';
+            else if (immortalQi >= 100) grade = 'sacred';
+            else if (immortalQi > 0) grade = 'immortal';
+            else if (magic >= 100) grade = 'fakeImmortal';
+            else if (magic >= 70) grade = 'top';
+            else if (magic >= 40) grade = 'great';
+            else if (magic >= 10) grade = 'good';
+            else if (magic > 0) grade = 'fine';
+            else grade = 'mid';
+
+            item.waterGrade = grade;
+            item.name = `水杯（${WATER_LABELS[grade] || QUALITY_LABELS[grade]}）`;
+            item.quality = ['fakeImmortal', 'immortal', 'sacred'].includes(grade) ? 'top' : grade;
+            item.labelQuality = item.quality;
+            if (grade === 'fakeImmortal') item.price = Math.round(item.baseValue * 21);
+            else if (grade === 'immortal') item.price = Math.round(item.baseValue * 101);
+            else if (grade === 'sacred') item.price = Math.round(item.baseValue * 2001);
+            else item.price = computeItemPrice(item);
+            return item;
+        }
+
+        function getItemQualityLabel(item) {
+            return item.water ? WATER_LABELS[item.waterGrade] || QUALITY_LABELS[item.waterGrade] : QUALITY_LABELS[item.labelQuality];
+        }
+
+        function formatQualityLine(item) {
+            const trueQ = QUALITY_LABELS[item.quality] || '中品';
+            const labelQ = QUALITY_LABELS[item.labelQuality] || trueQ;
+            if (item.labelQuality !== item.quality) {
+                return `標示 ${labelQ}（實際 ${trueQ}）`;
+            }
+            return `品質 ${trueQ}`;
+        }
+
+        function qualityClass(q) {
+            return 'quality-' + (q || 'mid');
+        }
+
+        function migrateGameState() {
+            (gameState.gridItems || []).forEach(ensureItemFields);
+            (gameState.counterItems || []).forEach(ensureItemFields);
+            if (!gameState.reputations) gameState.reputations = {};
+            if (!gameState.reputationVersion) {
+                const legacyStartingReputation = { folk: 30, guild: 20, noble: 10, underworld: 5 };
+                for (const faction of Object.keys(legacyStartingReputation)) {
+                    const oldValue = Number(gameState.reputations[faction] ?? legacyStartingReputation[faction]);
+                    gameState.reputations[faction] = oldValue - legacyStartingReputation[faction];
+                }
+                gameState.reputationVersion = 2;
+            }
+            if (!Array.isArray(gameState.customerFactionQueue)) gameState.customerFactionQueue = [];
+            for (const key of ['unlockedShopAddresses', 'metShopOwners', 'professions', 'ownedWaterTools', 'ownedWaterComponents']) {
+                if (!Array.isArray(gameState[key])) gameState[key] = [];
+            }
+            if (!gameState.packagingMachine || typeof gameState.packagingMachine !== 'object') {
+                gameState.packagingMachine = { packageItem: null, contents: [] };
+            }
+            if (!Array.isArray(gameState.packagingMachine.contents)) gameState.packagingMachine.contents = [];
+            if (!Number.isFinite(Number(gameState.rentAmount))) gameState.rentAmount = 300;
+            if (!Number.isFinite(Number(gameState.rentArrears))) gameState.rentArrears = 0;
+            if (!Array.isArray(gameState.unlockedCamps)) gameState.unlockedCamps = [];
+            for (const faction of Object.keys(MAINLINE_CAMPS)) {
+                if (Number(gameState.reputations[faction]) >= 20 && !gameState.unlockedCamps.includes(faction)) {
+                    gameState.unlockedCamps.push(faction);
+                }
+            }
+            if (!gameState.campIntel) gameState.campIntel = {};
+            if (!gameState.waterProduction) gameState.waterProduction = { day: gameState.day || 1, makerUses: 0, faucetPoorUses: 0 };
+            gameState.ownedWaterTools.forEach(tool => {
+                if (!Array.isArray(tool.storage)) tool.storage = [];
+                if (!Array.isArray(tool.filters)) tool.filters = tool.id === 'purifier' ? ['sediment'] : [];
+                if (!Number.isFinite(Number(tool.durability)) && tool.id === 'compressor') tool.durability = 20;
+                if (!Number.isFinite(Number(tool.slots))) tool.slots = tool.id === 'water-maker' ? 0 : 3;
+            });
+            if (gameState.waterProduction.day !== gameState.day) {
+                gameState.waterProduction = { day: gameState.day, makerUses: 0, faucetPoorUses: 0 };
+            }
+            for (const faction of ['folk', 'guild', 'noble', 'underworld']) {
+                gameState.reputations[faction] = Math.max(-100, Math.min(100, Number(gameState.reputations[faction]) || 0));
+            }
+        }
+
+        function itemMatchesRequest(item, request) {
+            if (!item || !request) return false;
+            if (Array.isArray(item.packageContents)) {
+                return item.packageContents.some(content => itemMatchesRequest(content, request));
+            }
+            if (request.kind === 'tag') return (item.tags || []).includes(request.tag);
+            if (request.kind === 'category') return item.category === request.category;
+            return false;
+        }
+
+        function getForgeryDetectionChance(customer, item) {
+            if (!item || item.forgeryInspected || item.labelQuality === item.quality) return 0;
+            const gap = Math.abs(qualityIndex(item.labelQuality) - qualityIndex(item.quality));
+            const gapFactor = gap / (QUALITY_KEYS.length - 1);
+            const identity = FACTION_DETECT_MOD[customer.faction] ?? 0.8;
+            const urgency = TRAIT_URGENCY_MOD[customer.trait] ?? 0.85;
+            const raw = gapFactor * identity * urgency;
+            return Math.min(1, raw);
+        }
+
+        function inspectOfferedItem(customer, item) {
+            if (!customer || !item || item.forgeryInspected) return false;
+            const detectionChance = getForgeryDetectionChance(customer, item);
+            item.forgeryInspected = true;
+            const detected = Math.random() < detectionChance;
+            if (!detected) {
+                autoSaveAll();
+                return false;
+            }
+
+            item.labelQuality = item.quality;
+            item.priceMultiplier *= 0.8;
+            ensureItemFields(item);
+            adjustReputation(customer.faction, -1);
+            const message = `顧客識破《${item.name}》的偽造標示；已還原品質並要求降價 20%，${getFactionName(customer.faction)} 聲望 -1。`;
+            logMsg(`⚠️ ${message}`);
+            document.getElementById('cust-dialogue').innerText = `「這標示是假的！我看得出原本品質，只能用降價 20% 的價格成交。」`;
+            autoSaveAll();
+            refreshUI();
+            return true;
+        }
+
+        function populateForgeQualitySelect(selected) {
+            const sel = document.getElementById('modal-forge-quality');
+            if (!sel) return;
+            sel.innerHTML = QUALITY_KEYS.map(k =>
+                `<option value="${k}" ${k === selected ? 'selected' : ''}>${QUALITY_LABELS[k]} (${Math.round(QUALITY_MULT[k] * 100)}%)</option>`
+            ).join('');
+        }
+
+        const CUSTOMER_TRAITS = {
+            "豪爽": { patienceMult: 1.2, marginTol: 0.35 },
+            "嚴謹": { patienceMult: 0.9, marginTol: 0.18 },
+            "急用": { patienceMult: 0.7, marginTol: 0.40 },
+            "貪婪": { patienceMult: 1.0, marginTol: 0.10 },
+            "收藏家": { patienceMult: 1.5, marginTol: 0.50 }
+        };
+        const SELLER_BUNDLE_PHRASES = [
+            '公道價',
+            '優惠價',
+            '良心價',
+            '白菜價',
+            '跳樓價'
+        ];
+
+        function formatAccount(acc) {
+            acc = acc.trim().toLowerCase();
+            if (!acc) return "";
+            if (!acc.includes('@')) {
+                if (acc.startsWith('st') || /^[a-z0-9]+$/i.test(acc)) {
+                    return acc + "@st.tc.edu.tw";
+                }
+            }
+            return acc.replace(/[^a-z0-9@._-]/g, '_');
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedAcc = localStorage.getItem('fantasy_shop_account');
+            if (savedAcc) {
+                document.getElementById('account-input').value = savedAcc;
+                updateAccountDisplay(savedAcc);
+            }
+        });
+
+        function updateAccountDisplay(accName) {
+            document.getElementById('display-current-account').innerText = accName || "未綁定";
+            document.getElementById('game-account-display').innerText = accName || "未綁定";
+            document.getElementById('modal-cloud-acc').innerText = accName || "未綁定";
+        }
+
+        function saveAndBindAccount() {
+            sfx.init();
+            const rawAcc = document.getElementById('account-input').value;
+            const cleanAcc = formatAccount(rawAcc);
+            if (!cleanAcc) { alert("請輸入 ST 帳號或 Gmail！"); return; }
+
+            gameState.account = cleanAcc;
+            document.getElementById('account-input').value = cleanAcc;
+            localStorage.setItem('fantasy_shop_account', cleanAcc);
+            updateAccountDisplay(cleanAcc);
+
+            alert(`已成功綁定帳號: ${cleanAcc}`);
+            fetchCloudSave(true);
+        }
+
+        function startGameFromHome(isNewGame = false) {
+            sfx.init();
+            const rawAcc = document.getElementById('account-input').value;
+            const cleanAcc = formatAccount(rawAcc);
+            if (!cleanAcc) { alert("進入遊戲前請先輸入帳號！"); return; }
+
+            gameState.account = cleanAcc;
+            localStorage.setItem('fantasy_shop_account', cleanAcc);
+            updateAccountDisplay(cleanAcc);
+
+            if (!isNewGame) {
+                const localData = localStorage.getItem(`fantasy_shop_save_${cleanAcc}`);
+                if (localData) {
+                    try { gameState = JSON.parse(localData); logMsg("已載入本地遊戲存檔"); } catch (e) {}
+                }
+            } else {
+                gameState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+                gameState.account = cleanAcc;
+            }
+
+            document.getElementById('screen-home').classList.add('hidden');
+            document.getElementById('screen-game').classList.remove('hidden');
+
+            refreshUI();
+            nextCustomer();
+            sfx.playBell();
+        }
+
+        function returnToHome() {
+            autoSaveAll();
+            document.getElementById('screen-game').classList.add('hidden');
+            document.getElementById('screen-home').classList.remove('hidden');
+        }
+
+        function confirmResetGame() {
+            if (confirm("確定要重置並開啟全新紀錄嗎？")) startGameFromHome(true);
+        }
+
+        // 分頁切換邏輯
+        function switchTab(tabName) {
+            sfx.init();
+            const tabs = ['shop', 'reputation', 'upgrades', 'logs'];
+            tabs.forEach(t => {
+                document.getElementById(`view-tab-${t}`).classList.add('hidden');
+                document.getElementById(`tab-btn-${t}`).classList.remove('nav-tab-active');
+            });
+
+            document.getElementById(`view-tab-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tab-btn-${tabName}`).classList.add('nav-tab-active');
+        }
+
+        function autoSaveAll() {
+            if (!gameState.account) return;
+            localStorage.setItem(`fantasy_shop_save_${gameState.account}`, JSON.stringify(gameState));
+            if (db) saveCloudSnapshot().catch(err => {
+                console.error('Cloud save failed:', err);
+                const statusBox = document.getElementById('modal-cloud-status');
+                if (statusBox) statusBox.innerText = `⚠️ 雲端寫入失敗：${err.message}`;
+            });
+        }
+
+        function saveCloudSnapshot() {
+            if (!db) return Promise.reject(new Error('Firebase 未連線，無法寫入雲端存檔。'));
+            if (!gameState.account) return Promise.reject(new Error('尚未綁定帳號。'));
+            return db.collection("shop_saves").doc(gameState.account).set({
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                data: JSON.parse(JSON.stringify(gameState))
+            });
+        }
+
+        async function manualSaveCloud() {
+            if (!gameState.account) {
+                alert('請先綁定帳號，再儲存雲端進度。');
+                return;
+            }
+            localStorage.setItem(`fantasy_shop_save_${gameState.account}`, JSON.stringify(gameState));
+            try {
+                await saveCloudSnapshot();
+                sfx.playCoin();
+                alert(`[雲端同步成功]\n已儲存進度至帳號：${gameState.account}`);
+            } catch (err) {
+                console.error('Manual cloud save failed:', err);
+                alert(`雲端存檔失敗：${err.message}`);
+            }
+        }
+
+        function fetchCloudDataModal() {
+            document.getElementById('modal-cloud').classList.remove('hidden');
+            fetchCloudSave();
+        }
+
+        function closeCloudModal() {
+            document.getElementById('modal-cloud').classList.add('hidden');
+        }
+
+        function mergeSaveDefaults(defaults, saved) {
+            if (Array.isArray(defaults)) return JSON.parse(JSON.stringify(Array.isArray(saved) ? saved : defaults));
+            if (defaults && typeof defaults === 'object') {
+                const source = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+                return Object.fromEntries(Object.keys(defaults).map(key => [
+                    key,
+                    key in source ? mergeSaveDefaults(defaults[key], source[key]) : mergeSaveDefaults(defaults[key], undefined)
+                ]));
+            }
+            return saved === undefined ? defaults : saved;
+        }
+
+        function normalizeCloudSave(documentData, account) {
+            const snapshot = documentData && (documentData.data || documentData.gameState || documentData);
+            if (!snapshot || typeof snapshot !== 'object' ||
+                !Number.isFinite(Number(snapshot.day)) || !Number.isFinite(Number(snapshot.gold))) {
+                throw new Error('雲端文件存在，但存檔格式無效或缺少必要欄位。');
+            }
+            const normalized = mergeSaveDefaults(DEFAULT_STATE, snapshot);
+            normalized.account = account;
+            return normalized;
+        }
+
+        async function fetchCloudSave(silent = false) {
+            const acc = formatAccount(document.getElementById('account-input').value) || gameState.account;
+            const statusBox = document.getElementById('modal-cloud-status');
+            if (!acc) {
+                if (statusBox) statusBox.innerText = '❌ 請先輸入並綁定帳號，再讀取雲端存檔。';
+                return;
+            }
+            updateAccountDisplay(acc);
+            if (statusBox) statusBox.innerText = "連線至 Firebase 雲端檢測中...";
+
+            if (!db) {
+                if (statusBox) statusBox.innerText = "❌ Firebase 未連線，為單機模式。";
+                return;
+            }
+
+            try {
+                const doc = await db.collection("shop_saves").doc(acc).get();
+                if (doc.exists) {
+                    const cloudData = normalizeCloudSave(doc.data(), acc);
+                    if (statusBox) {
+                        statusBox.innerHTML = `<span class="text-emerald-400">✅ 找到雲端存檔！</span><br>營業天數: 第 ${cloudData.day} 天<br>持有金幣: ${cloudData.gold} G`;
+                    }
+                    if (silent) {
+                        if (confirm(`檢測到 ST/Gmail 帳號 [${acc}] 存在雲端進度，是否讀取？`)) {
+                            applyLoadedGameState(cloudData, acc);
+                        }
+                    } else if (confirm("覆蓋當前進度並載入此雲端存檔？")) {
+                        applyLoadedGameState(cloudData, acc);
+                    }
+                } else {
+                    if (statusBox) statusBox.innerText = "ℹ️ 該帳號雲端尚無紀錄。請確認使用正確帳號，或先由其他裝置上傳存檔。";
+                }
+            } catch (err) {
+                console.error('Cloud load failed:', err);
+                if (statusBox) statusBox.innerText = "⚠️ 錯誤: " + err.message;
+                if (silent || !statusBox) alert(`雲端存檔讀取失敗：${err.message}`);
+            }
+        }
+
+        function applyLoadedGameState(savedState, account) {
+            gameState = mergeSaveDefaults(DEFAULT_STATE, savedState);
+            gameState.account = account;
+            migrateGameState();
+            localStorage.setItem(`fantasy_shop_save_${account}`, JSON.stringify(gameState));
+            updateAccountDisplay(account);
+            refreshUI();
+            closeCloudModal();
+            if (!document.getElementById('screen-game').classList.contains('hidden')) {
+                currentCustomer = null;
+                selectedOfferItemIds = [];
+                nextCustomer();
+            }
+        }
+
+        function refreshUI() {
+            migrateGameState();
+            document.getElementById('day-display').innerText = gameState.day;
+            document.getElementById('gold-display').innerText = gameState.gold;
+            document.getElementById('game-account-display').innerText = gameState.account || "未綁定";
+
+            document.getElementById('cust-rem-display').innerText = gameState.customersRemaining;
+            document.getElementById('cust-max-display').innerText = gameState.dailyStats.customersToday + gameState.customersRemaining;
+
+            renderRep('folk');
+            renderRep('guild');
+            renderRep('noble');
+            renderRep('underworld');
+
+            const gridDims = getGridDimensions(gameState.upgrades.grid);
+            gameState.gridRows = gridDims.r;
+            gameState.gridCols = gridDims.c;
+            ensureOwnedDevicesOnShelf();
+
+            document.getElementById('upg-grid-lv').innerText = gameState.upgrades.grid;
+            document.getElementById('upg-grid-dim').innerText = `${gameState.gridRows}×${gameState.gridCols}`;
+            document.getElementById('grid-dim-text').innerText = `${gameState.gridRows}×${gameState.gridCols}`;
+            document.getElementById('cost-upg-grid').innerText = gameState.upgrades.grid >= 16 ? '已達上限' : getUpgradeCost('grid');
+            document.getElementById('btn-upg-grid').disabled = gameState.upgrades.grid >= 16;
+            document.getElementById('btn-upg-grid').classList.toggle('opacity-50', gameState.upgrades.grid >= 16);
+            document.getElementById('btn-upg-grid').classList.toggle('cursor-not-allowed', gameState.upgrades.grid >= 16);
+
+            const custMax = getCustMaxByLv(gameState.upgrades.cust);
+            gameState.maxCustomers = custMax;
+            document.getElementById('upg-cust-lv').innerText = gameState.upgrades.cust;
+            document.getElementById('upg-cust-max').innerText = custMax;
+            document.getElementById('cost-upg-cust').innerText = getUpgradeCost('cust');
+
+            document.getElementById('upg-talk-lv').innerText = gameState.upgrades.talk;
+            document.getElementById('cost-upg-talk').innerText = getUpgradeCost('talk');
+
+            renderCounterList();
+            renderGridShelf();
+        }
+
+        function ensureOwnedDevicesOnShelf() {
+            const configs = {
+                'water-maker': { name: '造水機', price: 2400, icon: 'fa-faucet-drip', w: 2, h: 2 },
+                purifier: { name: '淨水器', price: 180, icon: 'fa-filter', w: 2, h: 2 },
+                'mana-pool': { name: '微型魔力池', price: 2200, icon: 'fa-wand-sparkles', w: 2, h: 2 },
+                compressor: { name: '聚魔機', price: 5000, icon: 'fa-compress', w: 2, h: 2 },
+                faucet: { name: '水龍頭', price: 80, icon: 'fa-faucet', w: 2, h: 1 }
+            };
+            const deviceIds = [
+                ...gameState.ownedWaterTools.map(tool => tool.id),
+                ...(gameState.ownedWaterComponents.includes('faucet') ? ['faucet'] : [])
+            ];
+            for (const id of deviceIds) {
+                if (gameState.gridItems.some(item => item.shopGoodId === id)) continue;
+                const config = configs[id];
+                const position = config && findFirstFreeGridCell(config.w, config.h);
+                if (!position) continue;
+                const item = {
+                    ...config, id: Date.now() + Math.floor(Math.random() * 1000000),
+                    category: 'folk', rarity: '普通', quality: 'mid', labelQuality: 'mid',
+                    baseValue: config.price, price: config.price, functional: true,
+                    shopGoodId: id, tags: ['tool', 'folk', 'functional'], ...position
+                };
+                gameState.gridItems.push(item);
+                logMsg(`已將舊存檔中的${config.name}放回貨架供操作`);
+            }
+        }
+
+        function getGridDimensions(lv) {
+            const level = Math.max(1, Math.min(16, Math.floor(Number(lv) || 1)));
+            const initialDimensions = {
+                1: { r: 7, c: 7 },
+                2: { r: 8, c: 7 },
+                3: { r: 8, c: 8 },
+                4: { r: 9, c: 8 },
+                5: { r: 9, c: 9 },
+                6: { r: 10, c: 10 }
+            };
+            if (level <= 6) return initialDimensions[level];
+            const expansion = level - 6;
+            const size = 10 + Math.floor(expansion / 2);
+            if (expansion % 2 === 1) {
+                return { r: size + 1, c: size };
+            }
+            return { r: size, c: size };
+        }
+
+        function getUpgradeCost(type) {
+            const baseCosts = { grid: 300, cust: 250, talk: 150 };
+            const level = Math.max(1, Number(gameState.upgrades[type]) || 1);
+            return Math.ceil(baseCosts[type] * 5 * (1.3 ** (level - 1)));
+        }
+
+        function getCustMaxByLv(lv) {
+            switch(lv) {
+                case 1: return 5;
+                case 2: return 6;
+                case 3: return 7;
+                case 4: return 8;
+                default: return 10;
+            }
+        }
+
+        function renderRep(key) {
+            const val = Math.max(-100, Math.min(100, Number(gameState.reputations[key]) || 0));
+            const bar = document.getElementById(`rep-${key}-bar`);
+            const steps = getReputationSteps(key);
+            const customerChange = Math.max(-2, Math.min(2, steps));
+            const budgetChange = steps >= 0 ? steps * 10 : steps * 5;
+            document.getElementById(`rep-${key}-val`).innerText = `${val.toFixed(2)} / ±100`;
+            bar.style.width = `${Math.abs(val) / 2}%`;
+            bar.style.left = val < 0 ? `${50 + val / 2}%` : '50%';
+            bar.classList.toggle('opacity-60', val < 0);
+            const unlocked = gameState.unlockedCamps.includes(key);
+            const campStatus = unlocked ? '營地已開放' : `營地聲望 ${Math.max(0, 20 - val).toFixed(2)} 點後開放`;
+            document.getElementById(`rep-${key}-effect`).innerText =
+                `目前效果：顧客 ${customerChange > 0 ? '+' : ''}${customerChange} 位｜預算 ${budgetChange > 0 ? '+' : ''}${budgetChange}%｜${campStatus}`;
+        }
+
+        function getReputationSteps(faction) {
+            return Math.trunc((Number(gameState.reputations[faction]) || 0) / 5);
+        }
+
+        function getFactionBudgetMultiplier(faction) {
+            const steps = getReputationSteps(faction);
+            return Math.max(0, steps >= 0 ? 1 + steps * 0.1 : 1 + steps * 0.05);
+        }
+
+        function createCustomerFactionQueue(baseCount) {
+            const factions = ['folk', 'guild', 'noble', 'underworld'];
+            const counts = Object.fromEntries(factions.map(faction => [faction, Math.floor(baseCount / factions.length)]));
+            const remainder = baseCount % factions.length;
+            const offset = Math.max(0, gameState.day - 1) % factions.length;
+            for (let i = 0; i < remainder; i++) counts[factions[(offset + i) % factions.length]]++;
+            for (const faction of factions) {
+                const customerDelta = Math.max(-2, Math.min(2, getReputationSteps(faction)));
+                counts[faction] = Math.max(0, counts[faction] + customerDelta);
+            }
+            const queue = factions.flatMap(faction => Array(counts[faction]).fill(faction));
+            for (let i = queue.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [queue[i], queue[j]] = [queue[j], queue[i]];
+            }
+            return queue;
+        }
+
+        function getAvailableOutingLocations() {
+            const camps = Object.entries(MAINLINE_CAMPS)
+                .filter(([faction]) => gameState.unlockedCamps.includes(faction))
+                .map(([faction, camp]) => ({ id: `camp:${faction}`, kind: 'camp', faction, ...camp }));
+            const shops = SHOP_OWNER_VISITORS
+                .filter(owner => gameState.unlockedShopAddresses.includes(owner.id))
+                .map(owner => ({ id: owner.id, kind: 'shop', name: owner.shopName }));
+            return [...camps, ...shops];
+        }
+
+        function beginOuting() {
+            document.getElementById('modal-settlement').classList.add('hidden');
+            const locations = getAvailableOutingLocations();
+            if (locations.length === 0) {
+                startNextDay();
+                return;
+            }
+            document.getElementById('modal-outing').classList.remove('hidden');
+            document.getElementById('outing-description').innerText = '選擇一個地點行動；完成後將開始新的一天。';
+            renderOutingDestinations();
+        }
+
+        function renderOutingDestinations() {
+            const container = document.getElementById('outing-destinations');
+            const details = document.getElementById('outing-shop-content');
+            details.classList.add('hidden');
+            details.innerHTML = '';
+            container.classList.remove('hidden');
+            const locations = getAvailableOutingLocations();
+            if (locations.length === 0) {
+                document.getElementById('outing-description').innerText = '目前沒有可前往的地點。';
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = locations.map(location => {
+                const action = location.kind === 'camp'
+                    ? `visitCamp('${location.faction}')`
+                    : `visitShop('${location.id}')`;
+                const subtitle = location.kind === 'camp'
+                    ? `${location.theme}｜聲望達 +20 解鎖營地，可打探陣營需求`
+                    : '支線商店地址｜外出採購不消耗營業日顧客額度';
+                return `<button onclick="${action}" class="text-left p-4 rounded-xl bg-slate-950 border border-slate-700 hover:border-cyan-500 transition">
+                    <span class="block font-bold text-amber-300 mb-1">${location.name}</span>
+                    <span class="block text-xs text-slate-400">${subtitle}</span>
+                </button>`;
+            }).join('');
+        }
+
+        function getRequestKey(request) {
+            return request.kind === 'tag' ? `tag:${request.tag}` : `category:${request.category}`;
+        }
+
+        function visitCamp(faction) {
+            const camp = MAINLINE_CAMPS[faction];
+            if (!camp || !gameState.unlockedCamps.includes(faction)) return;
+            const request = CUSTOMER_REQUESTS[Math.floor(Math.random() * CUSTOMER_REQUESTS.length)];
+            gameState.campIntel[faction] = {
+                request: { kind: request.kind, tag: request.tag, category: request.category, label: request.label },
+                untilDay: gameState.day + 2
+            };
+            document.getElementById('outing-description').innerText =
+                `${camp.name}探得需求：「${request.label}」。接下來兩個營業日，${getFactionName(faction)}顧客採購此類商品時的預算提高 20%。`;
+            document.getElementById('outing-destinations').classList.add('hidden');
+            const details = document.getElementById('outing-shop-content');
+            details.classList.remove('hidden');
+            details.innerHTML = `<button onclick="finishOuting()" class="w-full py-3 bg-cyan-700 hover:bg-cyan-600 text-white font-bold rounded-lg">返回商店並開始新的一天</button>`;
+            autoSaveAll();
+        }
+
+        function visitShop(shopId) {
+            const owner = SHOP_OWNER_VISITORS.find(visitor => visitor.id === shopId);
+            if (!owner || !gameState.unlockedShopAddresses.includes(shopId)) return;
+            document.getElementById('outing-description').innerText = `${owner.shopName}：購買道具、職業手則或商店部件。`;
+            document.getElementById('outing-destinations').classList.add('hidden');
+            const details = document.getElementById('outing-shop-content');
+            details.classList.remove('hidden');
+            details.innerHTML = SHOP_CATALOG[shopId].map(good => {
+                const alreadyOwned = ['water-maker', 'purifier', 'mana-pool', 'compressor', 'packaging-machine'].includes(good.id) &&
+                    (gameState.ownedWaterTools.some(tool => tool.id === good.id) ||
+                        (good.id === 'packaging-machine' && gameState.gridItems.some(item => item.shopGoodId === good.id)));
+                const componentOwned = good.id === 'faucet' &&
+                    gameState.gridItems.some(item => item.shopGoodId === good.id);
+                const professionMissing = good.profession && !gameState.professions.includes(good.profession);
+                const unavailable = alreadyOwned || componentOwned || professionMissing ||
+                    (good.id === 'water-manual' && gameState.professions.includes('waterMerchant'));
+                const requirement = professionMissing ? '需要水商職業'
+                    : alreadyOwned || componentOwned ? '已擁有'
+                    : good.id === 'water-manual' && gameState.professions.includes('waterMerchant') ? '已學會' : '';
+                const singlePurchase = alreadyOwned || componentOwned || good.id === 'water-manual';
+                return `<div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                    <div class="min-w-0"><div class="font-bold text-sm text-slate-100"><i class="fa-solid ${good.icon} text-amber-400 mr-2"></i>${good.name}</div>
+                    <p class="text-xs text-slate-400 mt-1">${good.description}</p></div>
+                    <div class="flex items-center gap-2 shrink-0">
+                    <label class="flex items-center gap-1 text-xs text-slate-400"><input class="shop-good-select accent-amber-500" type="checkbox" data-good-id="${good.id}" ${unavailable ? 'disabled' : ''}>選購</label>
+                    <input class="shop-good-quantity w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs" data-good-id="${good.id}" type="number" min="1" max="50" value="1" ${singlePurchase ? 'disabled' : ''} aria-label="${good.name}數量">
+                    <span class="text-xs text-amber-300">${requirement || `${good.price} G/件`}</span></div>
+                </div>`;
+            }).join('');
+            details.innerHTML += `<button onclick="buySelectedShopGoods('${shopId}')" class="w-full mt-3 py-3 bg-amber-600 hover:bg-amber-500 text-slate-950 font-black rounded-lg">確認採購選取商品</button>`;
+        }
+
+        function buySelectedShopGoods(shopId) {
+            const selections = [...document.querySelectorAll('.shop-good-select:checked')]
+                .map(input => {
+                    const good = (SHOP_CATALOG[shopId] || []).find(item => item.id === input.dataset.goodId);
+                    const quantityInput = document.querySelector(`.shop-good-quantity[data-good-id="${input.dataset.goodId}"]`);
+                    return good ? { good, quantity: Math.max(1, Math.min(50, parseInt(quantityInput?.value, 10) || 1)) } : null;
+                }).filter(Boolean);
+            if (selections.length === 0) {
+                alert('請先選取要購買的商品。');
+                return;
+            }
+            const buyingWaterManual = selections.some(({ good }) => good.id === 'water-manual');
+            if (selections.some(({ good }) => good.profession && !gameState.professions.includes(good.profession) &&
+                !(good.profession === 'waterMerchant' && buyingWaterManual))) {
+                alert('尚未取得水商職業，無法購買所選道具。');
+                return;
+            }
+            const totalCost = selections.reduce((total, selection) => total + selection.good.price * selection.quantity, 0);
+            if (gameState.gold < totalCost) {
+                alert(`金幣不足：本次採購需要 ${totalCost} G。`);
+                return;
+            }
+            if (selections.some(({ good, quantity }) =>
+                ['water-maker', 'purifier', 'mana-pool', 'compressor', 'packaging-machine', 'water-manual', 'faucet']
+                    .includes(good.id) && quantity !== 1)) {
+                alert('功能設備、手則與部件每次只能購買一件。');
+                return;
+            }
+            const planned = [];
+            for (const { good, quantity } of selections) {
+                if (                ['water-maker', 'purifier', 'mana-pool', 'compressor', 'packaging-machine', 'faucet'].includes(good.id) &&
+                    (gameState.ownedWaterTools.some(tool => tool.id === good.id) ||
+                        gameState.gridItems.some(item => item.shopGoodId === good.id))) {
+                    alert(`${good.name}已擁有，無法重複購買。`);
+                    return;
+                }
+                if (good.id === 'water-manual' && gameState.professions.includes('waterMerchant')) {
+                    alert('已取得水商職業，無法重複購買手則。');
+                    return;
+                }
+                for (let count = 0; count < quantity; count++) {
+                    if (good.id === 'water-manual' || good.id === 'faucet') continue;
+                    const item = createShopGridItem(good);
+                    const position = findFirstFreeGridCell(item.w, item.h, planned);
+                    if (!position) {
+                        alert('貨架空間不足，無法放入本次所有採購商品。');
+                        return;
+                    }
+                    planned.push(position);
+                    item.r = position.r;
+                    item.c = position.c;
+                    item.price = good.price;
+                    item.baseValue = good.price;
+                    item.id = Date.now() + Math.floor(Math.random() * 1000000) + planned.length;
+                    item.shopGoodId = good.id;
+                    item.functional = Boolean(good.functional);
+                    ensureItemFields(item);
+                    if (!item.packageContents) item.price = good.price;
+                    planned[planned.length - 1] = { r: position.r, c: position.c, w: item.w, h: item.h, item };
+                }
+            }
+            gameState.gold -= totalCost;
+            for (const { good } of selections) {
+                if (good.id === 'water-manual') {
+                    if (!gameState.professions.includes('waterMerchant')) gameState.professions.push('waterMerchant');
+                    continue;
+                }
+                if (good.id === 'faucet' && !gameState.ownedWaterComponents.includes('faucet')) {
+                    gameState.ownedWaterComponents.push('faucet');
+                }
+                if (['water-maker', 'purifier', 'mana-pool', 'compressor'].includes(good.id)) {
+                    const deviceConfig = {
+                        'water-maker': { name: '造水機', slots: 0 },
+                        purifier: {
+                            name: '淨水器', slots: 3,
+                            filters: ['sediment', ...(gameState.ownedWaterComponents.includes('filter-salt') ? ['salt'] : []),
+                                ...(gameState.ownedWaterComponents.includes('filter-organic') ? ['organic'] : [])]
+                        },
+                        'mana-pool': { name: '微型魔力池', slots: 3 },
+                        compressor: { name: '聚魔機', slots: 3, durability: 20 }
+                    }[good.id];
+                    gameState.ownedWaterTools.push({ id: good.id, ...deviceConfig, storage: [] });
+                }
+            }
+            for (const placement of planned) gameState.gridItems.push(placement.item);
+            logMsg(`外出採購：${selections.map(({ good, quantity }) => `${good.name}${quantity > 1 ? ` ×${quantity}` : ''}`).join('、')}，共 ${totalCost} G`);
+            autoSaveAll();
+            refreshUI();
+            finishOuting();
+        }
+
+        function createShopGridItem(good) {
+            const item = {
+                id: 0, name: good.id === 'cup' ? '空杯' : good.name, category: 'folk',
+                rarity: '普通', baseValue: good.price, icon: good.icon, w: good.w || 1, h: good.h || 1,
+                quality: 'mid', labelQuality: 'mid', tags: ['tool', 'folk'], price: good.price
+            };
+            if (good.id === 'cup') {
+                item.emptyCup = true;
+                item.tags.push('cup');
+            }
+            if (good.consumable) item.consumable = good.consumable;
+            if (good.packagingSupply) {
+                item.packagingSupply = good.packagingSupply;
+                item.tags.push('packaging');
+            }
+            if (good.id === 'purify-pill') {
+                item.consumable = 'purify';
+                item.tags.push('medicine');
+            } else if (good.id === 'mana-pill') {
+                item.consumable = 'mana';
+                item.tags.push('medicine', 'magic');
+            }
+            if (good.functional) item.tags.push('functional');
+            return item;
+        }
+
+        function finishOuting() {
+            document.getElementById('modal-outing').classList.add('hidden');
+            startNextDay();
+        }
+
+        function findFirstFreeGridCell(w, h, reserved = []) {
+            for (let r = 0; r < gameState.gridRows; r++) {
+                for (let c = 0; c < gameState.gridCols; c++) {
+                    const overlapsReserved = reserved.some(position =>
+                        r < position.r + (position.h || 1) && r + h > position.r &&
+                        c < position.c + (position.w || 1) && c + w > position.c
+                    );
+                    if (!overlapsReserved && canPlaceItemAt(r, c, w, h)) return { r, c };
+                }
+            }
+            return null;
+        }
+
+        function allowPackagingDrop(event) {
+            if (dragPayload && dragPayload.source === 'grid') event.preventDefault();
+        }
+
+        function handlePackagingDrop(event) {
+            event.preventDefault();
+            if (!dragPayload || dragPayload.source !== 'grid') return;
+            const index = gameState.gridItems.findIndex(item => item.id === dragPayload.itemId);
+            if (index < 0) return;
+            const item = gameState.gridItems[index];
+            const machine = gameState.packagingMachine;
+            if (!gameState.gridItems.some(candidate => candidate.shopGoodId === 'packaging-machine')) {
+                alert('請先購買並放置道具包裝機。');
+                return;
+            }
+            if (!machine.packageItem) {
+                if (!item.packagingSupply) {
+                    alert('請先放入杯子包裝或藥丸包裝。');
+                    return;
+                }
+                machine.packageItem = { ...item };
+                machine.packageOrigin = { r: item.r, c: item.c };
+                gameState.gridItems.splice(index, 1);
+            } else {
+                const isCup = machine.packageItem.packagingSupply === 'cup';
+                const matches = isCup ? item.emptyCup : ['purify', 'mana'].includes(item.consumable);
+                if (!matches) {
+                    alert(isCup ? '杯子包裝只能裝空杯。' : '藥丸包裝只能裝淨水藥丸或魔力藥丸。');
+                    return;
+                }
+                if (machine.contents.length >= 10) {
+                    alert('每個包裝最多裝 10 件物品。');
+                    return;
+                }
+                machine.contents.push({ ...item });
+                gameState.gridItems.splice(index, 1);
+                if (machine.contents.length === 10) finishPackaging();
+            }
+            dragPayload = null;
+            autoSaveAll();
+            refreshUI();
+        }
+
+        function finishPackaging() {
+            const machine = gameState.packagingMachine;
+            if (!machine.packageItem || machine.contents.length === 0) return;
+            const contents = machine.contents;
+            const supply = machine.packageItem;
+            const origin = machine.packageOrigin || { r: supply.r, c: supply.c };
+            const tags = [...new Set(contents.flatMap(item => item.tags || []))];
+            const item = {
+                id: Date.now() + Math.floor(Math.random() * 100000),
+                name: supply.packagingSupply === 'cup' ? `空杯包裝（${contents.length}個）` : `藥丸包裝（${contents.length}顆）`,
+                category: 'folk', rarity: '普通', baseValue: supply.baseValue, icon: supply.icon,
+                w: 1, h: 3, r: origin.r, c: origin.c, quality: 'mid', labelQuality: 'mid',
+                tags: [...new Set([...tags, 'packaged'])], packageContents: contents,
+                packageType: supply.packagingSupply, packagingCost: supply.baseValue
+            };
+            ensureItemFields(item);
+            const position = canPlaceItemAt(item.r, item.c, item.w, item.h) ? { r: item.r, c: item.c } : findFirstFreeGridCell(item.w, item.h);
+            if (!position) {
+                alert('貨架沒有空位，暫時無法完成包裝。');
+                return;
+            }
+            item.r = position.r;
+            item.c = position.c;
+            gameState.gridItems.push(item);
+            machine.packageItem = null;
+            machine.contents = [];
+            delete machine.packageOrigin;
+            logMsg(`包裝完成：《${item.name}》`);
+            autoSaveAll();
+            closeItemOpModal();
+            refreshUI();
+        }
+
+        function getWaterToolHint(tool) {
+            if (tool.id === 'water-maker') return '拖空杯來接佳品水（需水商職業）。';
+            if (tool.id === 'faucet') return '拖空杯來接水；前 5 杯劣品，其後廢品。';
+            if (tool.id === 'purifier') return `可過濾：${(tool.filters || []).map(id => WATER_CONTAMINANTS.find(type => type.id === id)?.name || id).join('、')}。`;
+            if (tool.id === 'mana-pool') return '將純水放入，增加 10 魔力；有仙力時依比例同化。';
+            return `100 魔力轉 0.1 仙力；耐久 ${tool.durability}/20，失敗率 10%。`;
+        }
+
+        function allowWaterToolDrop(event) {
+            if (dragPayload && dragPayload.source === 'grid') event.preventDefault();
+        }
+
+        function handleWaterToolDrop(event, toolId) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!dragPayload || dragPayload.source !== 'grid') return;
+            const gridIndex = gameState.gridItems.findIndex(item => item.id === dragPayload.itemId);
+            if (gridIndex < 0) return;
+            const item = gameState.gridItems[gridIndex];
+            const tool = gameState.ownedWaterTools.find(device => device.id === toolId);
+            if (!gameState.gridItems.some(candidate => candidate.shopGoodId === toolId)) {
+                alert('請先將設備放回貨架上才能使用。');
+                return;
+            }
+
+            if (item.emptyCup && ['water-maker', 'faucet'].includes(toolId)) {
+                if (toolId === 'water-maker' && !gameState.professions.includes('waterMerchant')) {
+                    alert('需要先取得水商職業才能使用造水機。');
+                    return;
+                }
+                if (toolId === 'water-maker' && gameState.waterProduction.makerUses >= 3) {
+                    alert('造水機今日已接滿 3 杯。');
+                    return;
+                }
+                const qualityWater = toolId === 'water-maker' || gameState.waterProduction.faucetPoorUses < 5;
+                const water = createWaterItem(toolId, qualityWater ? (toolId === 'faucet' ? 8 : 0) : 12, toolId === 'water-maker' ? 20 : 0);
+                Object.assign(water, { id: item.id, r: item.r, c: item.c, emptyCup: false });
+                gameState.gridItems[gridIndex] = water;
+                if (toolId === 'water-maker') gameState.waterProduction.makerUses++;
+                else gameState.waterProduction.faucetPoorUses++;
+                logMsg(`裝水完成：《${water.name}》回到原貨架位置`);
+            } else if (item.consumable && item.consumable.startsWith('filter-') && toolId === 'purifier' && tool) {
+                const contaminant = item.consumable === 'filter-salt' ? 'salt' : 'organic';
+                if (tool.filters.includes(contaminant)) {
+                    alert('淨水器已安裝這種濾芯。');
+                    return;
+                }
+                tool.filters.push(contaminant);
+                if (!gameState.ownedWaterComponents.includes(item.consumable)) {
+                    gameState.ownedWaterComponents.push(item.consumable);
+                }
+                gameState.gridItems.splice(gridIndex, 1);
+                logMsg(`${tool.name}已安裝${contaminant === 'salt' ? '鹽分' : '有機物'}濾芯`);
+            } else if (item.water && tool && ['purifier', 'mana-pool', 'compressor'].includes(toolId)) {
+                if (tool.storage.length >= tool.slots) {
+                    alert(`${tool.name}儲存格已滿。`);
+                    return;
+                }
+                if (toolId === 'purifier') {
+                    tool.storage.push({ ...item, originR: item.r, originC: item.c, processing: true, readyDay: gameState.day + 1 });
+                    gameState.gridItems.splice(gridIndex, 1);
+                    logMsg(`《${item.name}》已送入淨水器，將於第 ${gameState.day + 1} 天完成過濾`);
+                    dragPayload = null;
+                    autoSaveAll();
+                    refreshUI();
+                    return;
+                }
+                if (!processWaterWithTool(item, tool)) return;
+                tool.storage.push({ ...item, originR: item.r, originC: item.c });
+                gameState.gridItems.splice(gridIndex, 1);
+            } else {
+                alert('此物品無法放入該設備。');
+                return;
+            }
+            dragPayload = null;
+            autoSaveAll();
+            refreshUI();
+        }
+
+        function processWaterWithTool(item, tool) {
+            if (tool.id === 'purifier') {
+                let removed = 0;
+                for (const contaminant of tool.filters) {
+                    removed += Number(item.impurities[contaminant]) || 0;
+                    item.impurities[contaminant] = 0;
+                }
+                updateWaterQuality(item);
+                logMsg(removed > 0 ? `淨水器過濾污染物 ${removed.toFixed(2)}%` : '淨水器沒有可處理的污染物');
+                return true;
+            }
+            if (getWaterImpurity(item) > 0) {
+                alert('水中仍有雜質，必須先用淨水器完全過濾後才能蘊養或聚魔。');
+                return false;
+            }
+            if (tool.id === 'mana-pool') {
+                assimilateWaterMagic(item, 10);
+                updateWaterQuality(item);
+                return true;
+            }
+            if (tool.id === 'compressor') {
+                if (tool.durability <= 0) {
+                    alert('聚魔機耐久已耗盡，需要維修或更換。');
+                    return false;
+                }
+                if (item.magic < 100) {
+                    alert('水中魔力未達 100，無法轉為仙力。');
+                    return false;
+                }
+                if (Math.random() < 0.1) {
+                    item.magic *= 0.7 + Math.random() * 0.2;
+                    tool.durability--;
+                    logMsg(`聚魔失敗：魔力流失，聚魔機耐久 -1（剩 ${tool.durability}）`);
+                } else {
+                    item.magic -= 100;
+                    item.immortalQi += 0.1;
+                    item.immortalQi += item.magic / 100 * 0.1;
+                    item.magic = 0;
+                    logMsg('聚魔成功：100 魔力壓縮為 0.1 仙力');
+                }
+                updateWaterQuality(item);
+                return true;
+            }
+            return false;
+        }
+
+        function assimilateWaterMagic(item, addedMagic) {
+            if (getWaterImpurity(item) > 0) {
+                item.magic = 0;
+                return;
+            }
+            if (item.immortalQi > 0) {
+                item.immortalQi += addedMagic / 100 * 0.1;
+                item.magic = 0;
+            } else {
+                item.magic += addedMagic;
+            }
+        }
+
+        function retrieveProcessedWater(toolId, slotIndex) {
+            const tool = gameState.ownedWaterTools.find(device => device.id === toolId);
+            if (!tool || !tool.storage[slotIndex]) return;
+            if (tool.storage[slotIndex].processing) {
+                alert('過濾尚未完成，請等到下一天再取回。');
+                return;
+            }
+            const [item] = tool.storage.splice(slotIndex, 1);
+            const origin = { r: item.originR, c: item.originC };
+            delete item.originR;
+            delete item.originC;
+            const position = canPlaceItemAt(origin.r, origin.c, 1, 1) ? origin : findFirstFreeGridCell(1, 1);
+            if (!position) {
+                tool.storage.splice(slotIndex, 0, item);
+                alert('貨架沒有空格，無法取回加工完成的水。');
+                return;
+            }
+            item.r = position.r;
+            item.c = position.c;
+            gameState.gridItems.push(item);
+            autoSaveAll();
+            refreshUI();
+        }
+
+        function handleGridItemDrop(event, targetItemId) {
+            if (!dragPayload || dragPayload.source !== 'grid') return;
+            const sourceIndex = gameState.gridItems.findIndex(item => item.id === dragPayload.itemId);
+            const target = gameState.gridItems.find(item => item.id === targetItemId);
+            if (sourceIndex < 0 || !target) return;
+            const source = gameState.gridItems[sourceIndex];
+            if (target.shopGoodId === 'packaging-machine') {
+                handlePackagingDrop(event);
+                return;
+            }
+            if (['water-maker', 'faucet', 'purifier', 'mana-pool', 'compressor'].includes(target.shopGoodId)) {
+                handleWaterToolDrop(event, target.shopGoodId);
+                return;
+            }
+            if (!target.water || !source.consumable) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (!['purify', 'mana'].includes(source.consumable)) {
+                alert('此耗材只能安裝於對應設備，不能直接用於水杯。');
+                return;
+            }
+            if (getWaterImpurity(target) > 0 && source.consumable === 'mana') {
+                alert('請先完全過濾水中雜質，否則魔力會受污染。');
+                return;
+            }
+            if (source.consumable === 'purify') {
+                const remaining = WATER_CONTAMINANTS.filter(type => target.impurities[type.id] > 0);
+                if (remaining.length === 0) {
+                    alert('這杯水沒有可淨化的污染物。');
+                    return;
+                }
+                const choice = prompt(`選擇要淨化的污染物：${remaining.map(type => type.name).join('、')}`);
+                const contaminant = remaining.find(type => type.name === choice || type.id === choice);
+                if (!contaminant) return;
+                target.impurities[contaminant.id] = 0;
+            } else {
+                assimilateWaterMagic(target, 5);
+            }
+            gameState.gridItems.splice(sourceIndex, 1);
+            updateWaterQuality(target);
+            logMsg(`${source.name}已用於${target.name}`);
+            dragPayload = null;
+            autoSaveAll();
+            refreshUI();
+        }
+
+        // ================= 7x7 背包貨架與臨櫃邏輯 =================
+
+        function renderCounterList() {
+            const container = document.getElementById('counter-items-list');
+            const hint = document.getElementById('counter-drop-hint');
+            if (hint) {
+                hint.classList.toggle('hidden', !(currentCustomer && currentCustomer.intent === 'buy'));
+            }
+            container.innerHTML = "";
+
+            if (!gameState.counterItems || gameState.counterItems.length === 0) {
+                container.innerHTML = `<div class="col-span-2 text-center py-6 text-xs text-slate-500 italic">櫃台目前空空如也（可拖曳物品至此）</div>`;
+                return;
+            }
+
+            gameState.counterItems.forEach(item => {
+                ensureItemFields(item);
+                const isSelected = selectedCounterItemId === item.id;
+                const isOffer = selectedOfferItemIds.includes(item.id);
+                const matchBuy = currentCustomer && currentCustomer.intent === 'buy' && itemMatchesRequest(item, currentCustomer.request);
+                const card = document.createElement('div');
+                card.draggable = true;
+                card.dataset.itemId = item.id;
+                card.className = `p-2.5 rounded-xl border flex justify-between items-center transition cursor-grab active:cursor-grabbing ${isSelected ? 'bg-amber-950/80 border-amber-400' : isOffer ? 'bg-cyan-950/80 border-cyan-400 ring-2 ring-cyan-500/60' : matchBuy ? 'bg-emerald-950/40 border-emerald-700' : 'bg-slate-950 border-slate-800'}`;
+                card.addEventListener('dragstart', (e) => startDrag(e, 'counter', item.id));
+                card.addEventListener('dragend', endDrag);
+                card.addEventListener('click', (e) => {
+                    if (currentCustomer && currentCustomer.intent === 'buy') {
+                        if (itemMatchesRequest(item, currentCustomer.request)) {
+                            toggleOfferItem(item);
+                            if (inspectOfferedItem(currentCustomer, item)) updateSelectedOfferPrice();
+                            refreshUI();
+                        } else {
+                            sfx.playReject();
+                            alert('這件不符合顧客需求的種類！');
+                        }
+                    }
+                });
+                
+                card.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-amber-950/40 border border-amber-700/50 flex items-center justify-center text-amber-400 text-sm shrink-0">
+                            <i class="fa-solid ${item.icon}"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-xs font-bold text-slate-200 truncate">${item.name}</div>
+                            <div class="text-[10px] text-slate-400"><span class="${qualityClass(item.labelQuality)}">${getItemQualityLabel(item)}</span> | ${item.w}×${item.h} | ${item.price}G</div>
+                        </div>
+                    </div>
+                    <button onclick="event.stopPropagation(); selectCounterItemForPlacement(${item.id})" class="px-3 py-1.5 shrink-0 ${isSelected ? 'bg-amber-500 text-slate-950' : 'bg-amber-600/80 hover:bg-amber-500 text-slate-950'} font-bold rounded-lg text-xs whitespace-nowrap shadow">
+                        ${isSelected ? '擺放中' : '排入貨架'}
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function toggleOfferItem(item) {
+            const index = selectedOfferItemIds.indexOf(item.id);
+            if (index >= 0) selectedOfferItemIds.splice(index, 1);
+            else {
+                const selectedItems = gameState.counterItems.filter(offer => selectedOfferItemIds.includes(offer.id));
+                const selectedTotal = selectedItems
+                    .reduce((total, offer) => total + offer.price, 0);
+                if (selectedTotal + item.price > currentCustomer.targetPrice) {
+                    alert(`顧客預算為 ${currentCustomer.targetPrice}G，已選商品總價不能再增加。`);
+                    return false;
+                }
+                selectedOfferItemIds.push(item.id);
+            }
+            updateSelectedOfferPrice();
+            return true;
+        }
+
+        function updateSelectedOfferPrice() {
+            const offers = findCurrentOfferItems();
+            const total = offers.reduce((sum, item) => sum + item.price, 0);
+            document.getElementById('offer-price-input').value = Math.min(
+                Math.max(1, total),
+                currentCustomer ? currentCustomer.targetPrice : 0
+            );
+        }
+
+        function startDrag(e, source, itemId) {
+            dragPayload = { source, itemId };
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(itemId));
+            e.currentTarget.classList.add('dragging-item');
+        }
+
+        function endDrag(e) {
+            dragPayload = null;
+            if (e.currentTarget) e.currentTarget.classList.remove('dragging-item');
+            document.querySelectorAll('.grid-cell-drag-over').forEach(el => el.classList.remove('grid-cell-drag-over'));
+        }
+
+        function handleCounterDragOver(e) {
+            if (!dragPayload) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleCounterDragLeave(e) {
+            e.preventDefault();
+        }
+
+        function handleCounterDrop(e) {
+            e.preventDefault();
+            if (!dragPayload) return;
+            if (dragPayload.source === 'grid') {
+                const idx = gameState.gridItems.findIndex(i => i.id === dragPayload.itemId);
+                if (idx !== -1) {
+                    const moving = gameState.gridItems[idx];
+                    const device = gameState.ownedWaterTools.find(tool => tool.id === moving.shopGoodId);
+                    if ((device && device.storage.length > 0) ||
+                        (moving.shopGoodId === 'packaging-machine' &&
+                            (gameState.packagingMachine.packageItem || gameState.packagingMachine.contents.length))) {
+                        alert('請先取回設備內的物品或完成包裝，再移動設備。');
+                        dragPayload = null;
+                        return;
+                    }
+                    const item = gameState.gridItems.splice(idx, 1)[0];
+                    delete item.r;
+                    delete item.c;
+                    gameState.counterItems.push(item);
+                    if (currentCustomer && currentCustomer.intent === 'buy' &&
+                        itemMatchesRequest(item, currentCustomer.request)) {
+                        if (toggleOfferItem(item) && inspectOfferedItem(currentCustomer, item)) updateSelectedOfferPrice();
+                    }
+                    logMsg(`移回櫃台：《${item.name}》`);
+                    autoSaveAll();
+                    refreshUI();
+                }
+            }
+            dragPayload = null;
+        }
+
+        function selectCounterItemForPlacement(itemId) {
+            selectedCounterItemId = itemId;
+            const item = gameState.counterItems.find(i => i.id === itemId);
+            if (item) {
+                document.getElementById('placement-hint').innerText = `已選擇【${item.name}】(${item.w}×${item.h})，點擊下方網格點選位置擺放！`;
+                document.getElementById('placement-hint').className = "text-xs text-amber-300 font-bold mt-0.5 animate-pulse";
+                document.getElementById('btn-cancel-place').classList.remove('hidden');
+            }
+            renderCounterList();
+        }
+
+        function cancelPlacement() {
+            selectedCounterItemId = null;
+            document.getElementById('placement-hint').innerText = "點擊櫃台物品「排入貨架」，再點擊下方格子即可放置";
+            document.getElementById('placement-hint').className = "text-xs text-slate-400 mt-0.5";
+            document.getElementById('btn-cancel-place').classList.add('hidden');
+            renderCounterList();
+            renderGridShelf();
+        }
+
+        function renderGridShelf() {
+            const container = document.getElementById('grid-container');
+            container.innerHTML = "";
+
+            const R = gameState.gridRows;
+            const C = gameState.gridCols;
+
+            container.style.gridTemplateColumns = `repeat(${C}, minmax(46px, 54px))`;
+            container.style.gridTemplateRows = `repeat(${R}, minmax(46px, 54px))`;
+
+            for (let r = 0; r < R; r++) {
+                for (let c = 0; c < C; c++) {
+                    const cell = document.createElement('div');
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+                    cell.style.gridColumn = String(c + 1);
+                    cell.style.gridRow = String(r + 1);
+                    cell.className = "grid-cell w-full h-full rounded-lg border border-slate-800 bg-slate-950/90 transition-colors flex items-center justify-center cursor-pointer hover:border-slate-600";
+
+                    cell.addEventListener('mouseenter', () => handleCellHover(r, c));
+                    cell.addEventListener('mouseleave', () => handleCellLeave());
+                    cell.addEventListener('click', () => handleCellClick(r, c));
+                    cell.addEventListener('dragover', (e) => handleGridCellDragOver(e, r, c));
+                    cell.addEventListener('dragleave', () => handleGridCellDragLeave(r, c));
+                    cell.addEventListener('drop', (e) => handleGridCellDrop(e, r, c));
+
+                    container.appendChild(cell);
+                }
+            }
+
+            gameState.gridItems.forEach(item => {
+                ensureItemFields(item);
+                const itemElem = document.createElement('div');
+                itemElem.draggable = true;
+                itemElem.dataset.itemId = item.id;
+                itemElem.style.gridColumn = `${item.c + 1} / span ${item.w}`;
+                itemElem.style.gridRow = `${item.r + 1} / span ${item.h}`;
+                itemElem.className = `z-10 rounded-lg border ${item.functional ? 'border-blue-400/90 bg-gradient-to-br from-slate-900 to-blue-950/90' : 'border-amber-500/70 bg-gradient-to-br from-slate-900 to-amber-950/90'} p-1.5 flex flex-col items-center justify-between shadow-lg cursor-grab active:cursor-grabbing hover:scale-[1.02] transition transform`;
+                
+                const deviceStatus = getShelfDeviceStatus(item);
+                itemElem.innerHTML = `
+                    <div class="text-[10px] ${item.functional ? 'text-blue-200' : 'text-amber-300'} font-bold truncate w-full text-center leading-tight">${item.name}</div>
+                    <div class="${item.functional ? 'text-blue-300' : 'text-amber-400'} text-sm my-0.5"><i class="fa-solid ${item.icon}"></i></div>
+                    <div class="text-[9px] ${qualityClass(item.labelQuality)} font-bold">${item.emptyCup ? '空杯' : getItemQualityLabel(item)}</div>
+                    <div class="text-[10px] gold-text font-black">${item.price}G</div>
+                    ${deviceStatus ? `<div class="w-full text-center text-[8px] text-blue-200 leading-tight">${deviceStatus}</div>` : ''}
+                `;
+
+                itemElem.addEventListener('dragstart', (e) => startDrag(e, 'grid', item.id));
+                itemElem.addEventListener('dragend', endDrag);
+                itemElem.addEventListener('dragover', (e) => {
+                    const dragged = dragPayload && gameState.gridItems.find(candidate => candidate.id === dragPayload.itemId);
+                    if (dragged && canDropGridItemOnTarget(dragged, item)) {
+                        e.preventDefault();
+                        itemElem.classList.add('grid-cell-drag-over');
+                    }
+                });
+                itemElem.addEventListener('dragleave', () => itemElem.classList.remove('grid-cell-drag-over'));
+                itemElem.addEventListener('drop', (e) => handleGridItemDrop(e, item.id));
+                itemElem.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openItemOpModal(item.id);
+                });
+
+                container.appendChild(itemElem);
+            });
+        }
+
+        function getShelfDeviceStatus(item) {
+            if (item.shopGoodId === 'water-maker') return `今日 ${gameState.waterProduction.makerUses}/3 杯`;
+            if (item.shopGoodId === 'faucet') return `劣品 ${gameState.waterProduction.faucetPoorUses}/5 杯`;
+            if (item.shopGoodId === 'purifier' || item.shopGoodId === 'mana-pool' || item.shopGoodId === 'compressor') {
+                const tool = gameState.ownedWaterTools.find(device => device.id === item.shopGoodId);
+                return tool ? `${tool.storage.length}/${tool.slots} 格` : '';
+            }
+            if (item.shopGoodId === 'packaging-machine') {
+                return gameState.packagingMachine.packageItem
+                    ? `包裝中 ${gameState.packagingMachine.contents.length}/10`
+                    : '待放包裝';
+            }
+            return '';
+        }
+
+        function canDropGridItemOnTarget(source, target) {
+            if (target.water && ['purify', 'mana'].includes(source.consumable)) return true;
+            if (target.shopGoodId === 'packaging-machine') {
+                return Boolean(source.packagingSupply || source.emptyCup ||
+                    ['purify', 'mana'].includes(source.consumable));
+            }
+            if (['water-maker', 'faucet'].includes(target.shopGoodId)) return Boolean(source.emptyCup);
+            if (target.shopGoodId === 'purifier') {
+                return Boolean(source.water || (source.consumable || '').startsWith('filter-'));
+            }
+            if (['mana-pool', 'compressor'].includes(target.shopGoodId)) return Boolean(source.water);
+            return false;
+        }
+
+        function canPlaceItemAt(r, c, w, h, ignoreItemId = null) {
+            const R = gameState.gridRows;
+            const C = gameState.gridCols;
+
+            if (r < 0 || c < 0 || r + h > R || c + w > C) return false;
+
+            for (let i = r; i < r + h; i++) {
+                for (let j = c; j < c + w; j++) {
+                    const occupied = gameState.gridItems.some(item =>
+                        item.id !== ignoreItemId &&
+                        i >= item.r && i < item.r + item.h &&
+                        j >= item.c && j < item.c + item.w
+                    );
+                    if (occupied) return false;
+                }
+            }
+            return true;
+        }
+
+        function handleGridCellDragOver(e, r, c) {
+            e.preventDefault();
+            if (!dragPayload) return;
+            handleCellLeave();
+            let w = 1, h = 1, ignoreId = null;
+            if (dragPayload.source === 'grid') {
+                const it = gameState.gridItems.find(i => i.id === dragPayload.itemId);
+                if (!it) return;
+                w = it.w; h = it.h; ignoreId = it.id;
+            } else if (dragPayload.source === 'counter') {
+                const it = gameState.counterItems.find(i => i.id === dragPayload.itemId);
+                if (!it) return;
+                w = it.w; h = it.h;
+            } else return;
+            const ok = canPlaceItemAt(r, c, w, h, ignoreId);
+            for (let i = r; i < r + h; i++) {
+                for (let j = c; j < c + w; j++) {
+                    const cell = document.querySelector(`.grid-cell[data-r="${i}"][data-c="${j}"]`);
+                    if (cell) {
+                        cell.classList.toggle('grid-cell-valid', ok);
+                        cell.classList.toggle('grid-cell-invalid', !ok);
+                        cell.classList.add('grid-cell-drag-over');
+                    }
+                }
+            }
+        }
+
+        function handleGridCellDragLeave(r, c) {
+            handleCellLeave();
+        }
+
+        function handleGridCellDrop(e, r, c) {
+            e.preventDefault();
+            handleCellLeave();
+            if (!dragPayload) return;
+
+            if (dragPayload.source === 'counter') {
+                const counterIdx = gameState.counterItems.findIndex(i => i.id === dragPayload.itemId);
+                if (counterIdx === -1) return;
+                const item = gameState.counterItems[counterIdx];
+                if (canPlaceItemAt(r, c, item.w, item.h)) {
+                    gameState.counterItems.splice(counterIdx, 1);
+                    gameState.gridItems.push({ ...item, r, c });
+                    if (selectedCounterItemId === item.id) cancelPlacement();
+                    logMsg(`排入貨架：《${item.name}》→ (${r + 1},${c + 1})`);
+                    sfx.playCoin();
+                    autoSaveAll();
+                    refreshUI();
+                } else sfx.playReject();
+            } else if (dragPayload.source === 'grid') {
+                const item = gameState.gridItems.find(i => i.id === dragPayload.itemId);
+                if (!item) return;
+                if (canPlaceItemAt(r, c, item.w, item.h, item.id)) {
+                    item.r = r;
+                    item.c = c;
+                    logMsg(`移動貨架：《${item.name}》→ (${r + 1},${c + 1})`);
+                    sfx.playCoin();
+                    autoSaveAll();
+                    refreshUI();
+                } else sfx.playReject();
+            }
+            dragPayload = null;
+        }
+
+        function handleCellHover(r, c) {
+            if (!selectedCounterItemId) return;
+            const item = gameState.counterItems.find(i => i.id === selectedCounterItemId);
+            if (!item) return;
+
+            const isValid = canPlaceItemAt(r, c, item.w, item.h);
+
+            for (let i = r; i < r + item.h; i++) {
+                for (let j = c; j < c + item.w; j++) {
+                    const cell = document.querySelector(`.grid-cell[data-r="${i}"][data-c="${j}"]`);
+                    if (cell) {
+                        cell.classList.add(isValid ? 'grid-cell-valid' : 'grid-cell-invalid');
+                    }
+                }
+            }
+        }
+
+        function handleCellLeave() {
+            document.querySelectorAll('.grid-cell').forEach(cell => {
+                cell.classList.remove('grid-cell-valid', 'grid-cell-invalid', 'grid-cell-drag-over');
+            });
+        }
+
+        function handleCellClick(r, c) {
+            if (!selectedCounterItemId) return;
+            const counterIdx = gameState.counterItems.findIndex(i => i.id === selectedCounterItemId);
+            if (counterIdx === -1) return;
+
+            const item = gameState.counterItems[counterIdx];
+
+            if (canPlaceItemAt(r, c, item.w, item.h)) {
+                gameState.counterItems.splice(counterIdx, 1);
+                const gridItem = { ...item, r, c };
+                gameState.gridItems.push(gridItem);
+
+                sfx.playCoin();
+                logMsg(`排入貨架：《${item.name}》放置於格子 (${r+1}, ${c+1})`);
+
+                cancelPlacement();
+                autoSaveAll();
+                refreshUI();
+            } else {
+                sfx.playReject();
+                alert("此區域重疊或超出邊界！");
+            }
+        }
+
+        function openItemOpModal(itemId) {
+            activeGridItemOpId = itemId;
+            const item = gameState.gridItems.find(i => i.id === itemId);
+            if (!item) return;
+            ensureItemFields(item);
+
+            document.getElementById('modal-item-name').innerText = item.name;
+            document.getElementById('modal-item-desc').innerText = `類別: ${getFactionName(item.category)} | 尺寸: ${item.w}×${item.h} | 底價: ${item.baseValue}G`;
+            document.getElementById('modal-item-price-display').innerText = `售價: ${item.price} G（依標示品質）`;
+            const trueQualityLabel = item.water ? getItemQualityLabel(item) : QUALITY_LABELS[item.quality];
+            document.getElementById('modal-item-true-quality').innerHTML = `實際品質: <span class="${qualityClass(item.quality)}">${trueQualityLabel}</span>`;
+            populateForgeQualitySelect(item.labelQuality);
+            renderFunctionalItemActions(item);
+
+            document.getElementById('modal-item-op').classList.remove('hidden');
+        }
+
+        function renderFunctionalItemActions(item) {
+            const container = document.getElementById('modal-functional-actions');
+            const tool = gameState.ownedWaterTools.find(device => device.id === item.shopGoodId) ||
+                (item.shopGoodId === 'faucet' ? { id: 'faucet', name: '水龍頭', storage: [], slots: 0 } : null);
+            const machine = gameState.packagingMachine;
+            let content = '';
+            if (tool) {
+                const hint = item.shopGoodId === 'water-maker'
+                    ? `今日已接 ${gameState.waterProduction.makerUses}/3 杯；將空杯拖到貨架上的設備。`
+                    : item.shopGoodId === 'faucet'
+                        ? `今日劣品 ${gameState.waterProduction.faucetPoorUses}/5 杯；將空杯拖到貨架上的設備。`
+                        : item.shopGoodId === 'purifier'
+                            ? `濾芯：${(tool.filters || []).map(id => WATER_CONTAMINANTS.find(type => type.id === id)?.name || id).join('、')}。過濾需一天。`
+                            : item.shopGoodId === 'mana-pool'
+                                ? '將水杯拖到貨架上的設備，可增加 10 點魔力。'
+                                : `將水杯拖到貨架上的設備；聚魔機耐久 ${tool.durability}/20。`;
+                const stored = (tool.storage || []).map((storedItem, index) =>
+                    `<div class="flex items-center justify-between gap-2 rounded bg-slate-950 px-2 py-1.5 text-[10px]">
+                        <span class="truncate">${storedItem.processing ? `過濾中，第 ${storedItem.readyDay} 天完成` : `${storedItem.name}｜${getItemQualityLabel(storedItem)}｜${storedItem.price}G`}</span>
+                        <button ${storedItem.processing ? 'disabled' : ''} onclick="retrieveProcessedWater('${tool.id}',${index})" class="shrink-0 text-cyan-300 hover:text-white disabled:text-slate-600">取回</button>
+                    </div>`).join('');
+                content = `<p class="text-xs text-blue-200">${hint}</p><div class="space-y-1">${stored || '<span class="text-[10px] text-slate-500">設備目前沒有加工中的水。</span>'}</div>`;
+            } else if (item.shopGoodId === 'packaging-machine') {
+                const supply = machine.packageItem
+                    ? (machine.packageItem.packagingSupply === 'cup' ? '空杯包裝' : '藥丸包裝')
+                    : '尚未放入包裝';
+                content = `<p class="text-xs text-blue-200">${supply}｜${machine.contents.length}/10 件</p>
+                    <p class="text-[10px] text-slate-400">${machine.contents.map(contentItem => contentItem.name).join('、') || '拖入包裝後，再拖入要包裝的物品。'}</p>
+                    ${machine.contents.length ? '<button onclick="finishPackaging()" class="w-full py-2 bg-blue-700 hover:bg-blue-600 text-white font-bold rounded-lg text-xs">完成包裝</button>' : ''}`;
+            } else if (item.water) {
+                content = '<p class="text-xs text-cyan-200">將水杯拖到貨架上的淨水器、魔力池或聚魔機即可加工。</p>';
+            } else if (item.emptyCup) {
+                content = '<p class="text-xs text-cyan-200">將空杯拖到貨架上的造水機或水龍頭即可裝水。</p>';
+            } else if (item.packagingSupply) {
+                content = '<p class="text-xs text-blue-200">將包裝拖到貨架上的道具包裝機，再拖入空杯或藥丸。</p>';
+            } else if (item.consumable && item.consumable.startsWith('filter-')) {
+                content = '<p class="text-xs text-blue-200">將濾芯拖到貨架上的淨水器安裝。</p>';
+            }
+            container.innerHTML = content;
+            container.classList.toggle('hidden', !content);
+        }
+
+        function closeItemOpModal() {
+            document.getElementById('modal-item-op').classList.add('hidden');
+            activeGridItemOpId = null;
+            document.getElementById('modal-functional-actions').classList.add('hidden');
+        }
+
+        function applyForgeQualityModal() {
+            const item = gameState.gridItems.find(i => i.id === activeGridItemOpId);
+            if (!item) return;
+            if (item.water || item.emptyCup || item.consumable) {
+                alert('水、空杯與耗材不能偽造品質標示。');
+                return;
+            }
+            const q = document.getElementById('modal-forge-quality').value;
+            if (item.labelQuality !== q) item.forgeryInspected = false;
+            item.labelQuality = q;
+            ensureItemFields(item);
+            logMsg(`偽造標示：《${item.name}》對外顯示為 ${QUALITY_LABELS[q]}（實際 ${QUALITY_LABELS[item.quality]}）`);
+            closeItemOpModal();
+            refreshUI();
+            autoSaveAll();
+        }
+
+        function resetForgeQualityModal() {
+            const item = gameState.gridItems.find(i => i.id === activeGridItemOpId);
+            if (!item) return;
+            item.labelQuality = item.quality;
+            ensureItemFields(item);
+            logMsg(`還原品質標示：《${item.name}》`);
+            closeItemOpModal();
+            refreshUI();
+            autoSaveAll();
+        }
+
+        function moveGridItemToCounter() {
+            const idx = gameState.gridItems.findIndex(i => i.id === activeGridItemOpId);
+            if (idx !== -1) {
+                const moving = gameState.gridItems[idx];
+                const device = gameState.ownedWaterTools.find(tool => tool.id === moving.shopGoodId);
+                if ((device && device.storage.length > 0) ||
+                    (moving.shopGoodId === 'packaging-machine' &&
+                        (gameState.packagingMachine.packageItem || gameState.packagingMachine.contents.length))) {
+                    alert('請先取回設備內的物品或完成包裝，再移動設備。');
+                    return;
+                }
+                const item = gameState.gridItems.splice(idx, 1)[0];
+                delete item.r;
+                delete item.c;
+                gameState.counterItems.push(item);
+                if (currentCustomer && currentCustomer.intent === 'buy' &&
+                        itemMatchesRequest(item, currentCustomer.request)) {
+                        if (toggleOfferItem(item) && inspectOfferedItem(currentCustomer, item)) updateSelectedOfferPrice();
+                }
+                logMsg(`移回櫃台：《${item.name}》`);
+                closeItemOpModal();
+                refreshUI();
+                autoSaveAll();
+            }
+        }
+
+        function discardGridItem() {
+            if (confirm("確定要丟棄這個物品嗎？")) {
+                const idx = gameState.gridItems.findIndex(i => i.id === activeGridItemOpId);
+                if (idx !== -1) {
+                    const discarding = gameState.gridItems[idx];
+                    const device = gameState.ownedWaterTools.find(tool => tool.id === discarding.shopGoodId);
+                    if ((device && device.storage.length > 0) ||
+                        (discarding.shopGoodId === 'packaging-machine' &&
+                            (gameState.packagingMachine.packageItem || gameState.packagingMachine.contents.length))) {
+                        alert('請先取回設備內的物品或完成包裝，再丟棄設備。');
+                        return;
+                    }
+                    const item = gameState.gridItems.splice(idx, 1)[0];
+                    logMsg(`丟棄物品：《${item.name}》`);
+                    closeItemOpModal();
+                    refreshUI();
+                    autoSaveAll();
+                }
+            }
+        }
+
+        // ================= 顧客接待與交易流程 =================
+
+        function chooseShopOwnerVisitor() {
+            const candidates = SHOP_OWNER_VISITORS.filter(owner =>
+                !gameState.metShopOwners.includes(owner.id)
+            );
+            if (candidates.length === 0) return null;
+            const visitChance = Math.max(0.12, 0.65 - Math.max(0, gameState.day - 1) * 0.06);
+            if (Math.random() >= visitChance) return null;
+            return candidates[Math.floor(Math.random() * candidates.length)];
+        }
+
+        function getRequestMarketItems(request) {
+            const items = ITEM_DATABASE
+                .filter(item => itemMatchesRequest(item, request))
+                .map(item => ensureItemFields({ ...item, quality: 'good', labelQuality: 'good' }));
+            for (const goods of Object.values(SHOP_CATALOG)) {
+                for (const good of goods.filter(entry => entry.functional)) {
+                    const item = createShopGridItem(good);
+                    item.quality = 'good';
+                    item.labelQuality = 'good';
+                    item.price = Math.round(good.price * (1 + QUALITY_MULT.good));
+                    if (itemMatchesRequest(item, request)) items.push(item);
+                }
+            }
+            if (request.kind === 'tag' && request.tag === 'water') {
+                items.push(createWaterItem('market', 0, 20));
+            }
+            return items;
+        }
+
+        function getRequestMedianPrice(request) {
+            const prices = getRequestMarketItems(request).map(item => item.price).sort((a, b) => a - b);
+            if (prices.length === 0) return 20;
+            const middle = Math.floor(prices.length / 2);
+            return prices.length % 2 ? prices[middle] : (prices[middle - 1] + prices[middle]) / 2;
+        }
+
+        function getCampIntelMultiplier(faction, request) {
+            const intel = gameState.campIntel[faction];
+            return intel && intel.untilDay >= gameState.day &&
+                intel.request && getRequestKey(intel.request) === getRequestKey(request) ? 1.2 : 1;
+        }
+
+        function nextCustomer() {
+            if (gameState.day % 7 === 0 && gameState.rentCollectedDay !== gameState.day &&
+                gameState.customersRemaining <= 0) {
+                gameState.customersRemaining = 1;
+                gameState.customerFactionQueue = ['folk'];
+            }
+            if (gameState.customersRemaining > 0 &&
+                gameState.customerFactionQueue.length !== gameState.customersRemaining) {
+                gameState.customerFactionQueue = createCustomerFactionQueue(gameState.customersRemaining);
+                gameState.customersRemaining = gameState.customerFactionQueue.length;
+            }
+            if (gameState.customersRemaining <= 0) {
+                document.getElementById('customer-active-area').classList.add('hidden');
+                document.getElementById('deal-action-buttons').classList.add('hidden');
+                document.getElementById('no-customer-area').classList.remove('hidden');
+                document.getElementById('no-cust-reason').innerText = "今日顧客額度已用完，請打烊結算！";
+                document.getElementById('btn-next-cust').classList.add('hidden');
+                return;
+            }
+
+            const queuedFaction = gameState.customerFactionQueue.shift();
+            gameState.customersRemaining--;
+            customerResolutionPending = false;
+            selectedOfferItemIds = [];
+            selectedSellerItemIds = [];
+
+            document.getElementById('customer-active-area').classList.remove('hidden');
+            document.getElementById('deal-action-buttons').classList.remove('hidden');
+            document.getElementById('no-customer-area').classList.add('hidden');
+            document.getElementById('btn-next-cust').classList.remove('hidden');
+
+            const traits = Object.keys(CUSTOMER_TRAITS);
+            const trait = traits[Math.floor(Math.random() * traits.length)];
+            const isRentDay = gameState.day % 7 === 0 && gameState.customersRemaining === 0;
+            const shopOwner = isRentDay ? null : chooseShopOwnerVisitor();
+            const faction = shopOwner ? shopOwner.faction : queuedFaction;
+            [...gameState.gridItems, ...gameState.counterItems].forEach(item => {
+                item.forgeryInspected = false;
+            });
+            let intent = isRentDay ? 'rent' : shopOwner ? 'sell' : (Math.random() < 0.5 ? 'sell' : 'buy');
+
+            let item = null;
+            let items = [];
+            let request = null;
+            let targetPrice = 0;
+            let hasCup = false;
+
+            if (intent === "sell") {
+                const bundleCount = shopOwner ? 1 : (Math.random() < 0.8 ? 3 + Math.floor(Math.random() * 8) : 1);
+                const candidates = shopOwner
+                    ? [shopOwner.item]
+                    : ITEM_DATABASE.filter(candidate => (candidate.category === faction || Math.random() < 0.3) &&
+                        (bundleCount <= 5 || candidate.w * candidate.h <= 2));
+                items = Array.from({ length: bundleCount }, (_, index) => {
+                    const rawItem = candidates[Math.floor(Math.random() * candidates.length)] || ITEM_DATABASE[0];
+                    const offeredItem = JSON.parse(JSON.stringify(rawItem));
+                    const quality = shopOwner ? 'mid' : rollRandomQuality();
+                    offeredItem.quality = quality;
+                    offeredItem.labelQuality = quality;
+                    offeredItem.id = Date.now() + index + Math.floor(Math.random() * 100000);
+                    ensureItemFields(offeredItem);
+                    offeredItem.askPrice = shopOwner ? Math.max(1, Math.round(offeredItem.price * 0.75)) :
+                        Math.max(1, Math.round(offeredItem.price * (0.75 + Math.random() * 0.35)));
+                    return offeredItem;
+                });
+                item = items[0];
+                targetPrice = items.reduce((total, offeredItem) => total + offeredItem.askPrice, 0);
+            } else if (intent === "buy") {
+                request = CUSTOMER_REQUESTS[Math.floor(Math.random() * CUSTOMER_REQUESTS.length)];
+                const marketItems = getRequestMarketItems(request);
+                const sample = marketItems[0] || ITEM_DATABASE[0];
+                item = { name: `（需求）${request.label}`, icon: 'fa-box-open', w: sample.w || 1, h: sample.h || 1, rarity: '—', quality: 'mid', labelQuality: 'mid', baseValue: sample.baseValue || 50, tags: sample.tags || [] };
+                ensureItemFields(item);
+                hasCup = request.tag === 'water' && Math.random() < 0.25 &&
+                    (gameState.gridItems.some(shelfItem => shelfItem.shopGoodId === 'faucet') ||
+                        gameState.ownedWaterTools.some(tool => tool.id === 'water-maker' &&
+                            gameState.gridItems.some(shelfItem => shelfItem.shopGoodId === 'water-maker') &&
+                            gameState.professions.includes('waterMerchant') && gameState.waterProduction.makerUses < 3));
+                const intelMultiplier = getCampIntelMultiplier(faction, request);
+                targetPrice = Math.max(1, Math.round(
+                    getRequestMedianPrice(request) * 1.5 * (0.9 + Math.random() * 0.2) *
+                    getFactionBudgetMultiplier(faction) * intelMultiplier
+                ));
+            } else {
+                targetPrice = gameState.rentAmount + gameState.rentArrears;
+                item = { name: '每週房租', icon: 'fa-house', w: 1, h: 1, rarity: '房租', quality: 'mid', labelQuality: 'mid', baseValue: targetPrice, tags: [] };
+            }
+
+            const names = {
+                folk: ["老農夫 鮑勃", "鎮民 莉莉", "木匠 漢斯", "獵人 傑克"],
+                guild: ["劍士 阿爾卡", "遊俠 艾莉絲", "傭兵 羅曼", "冒險者 凱爾"],
+                noble: ["宮廷侍從", "男爵夫人", "騎士長 威廉", "收藏家 亨利"],
+                underworld: ["走私客", "盜賊 飛鼠", "暗影掮客", "神秘賣家"]
+            };
+
+            const customerName = intent === 'rent' ? '房東' : shopOwner ? shopOwner.name : names[faction][Math.floor(Math.random() * names[faction].length)];
+
+            const buyPhrase = request ? request.phrases[Math.floor(Math.random() * request.phrases.length)] : '';
+            const bundlePhrase = intent === 'sell' && items.length > 1
+                ? SELLER_BUNDLE_PHRASES[Math.floor(Math.random() * SELLER_BUNDLE_PHRASES.length)]
+                : null;
+            const bundleDiscount = bundlePhrase ? 0.05 + Math.random() * 0.05 : 0;
+            currentCustomer = {
+                name: customerName,
+                faction: faction,
+                trait: trait,
+                intent: intent,
+                patience: 100,
+                item: item,
+                items,
+                request: request,
+                targetPrice: targetPrice,
+                rentAmount: intent === 'rent' ? gameState.rentAmount : 0,
+                rentArrears: intent === 'rent' ? gameState.rentArrears : 0,
+                bundlePhrase,
+                bundleDiscount,
+                shopOwnerId: shopOwner?.id || null,
+                hasCup,
+                dialogue: intent === "rent"
+                    ? `「本週租金共 ${targetPrice} G（本期 ${gameState.rentAmount} G，欠租 ${gameState.rentArrears} G）。支付租金，或交一件史詩級／頂品以上物品，把本期租金延到下週。」`
+                    : intent === "sell"
+                    ? shopOwner
+                        ? `「我是${shopOwner.shopName}的店主，帶來一件樣品，${targetPrice}G 賣給你。成交後我把店址留給你。」`
+                        : bundlePhrase
+                            ? `「老闆！我帶了 ${items.length} 件物品想賣，挑選要收購的物品吧；全部收購的話我能給個${bundlePhrase}！」`
+                            : `「老闆！我帶了《${item.name}》（${getItemQualityLabel(item)}），${targetPrice}G 賣給你，收嗎？」`
+                    : `「${buyPhrase}。預算大約 ${targetPrice}G，請把符合的貨放到櫃台給我看。」`
+            };
+
+            document.getElementById('cust-name').innerText = currentCustomer.name;
+            document.getElementById('cust-trait').innerText = currentCustomer.trait;
+            document.getElementById('cust-intent').innerText = intent === "rent" ? "每週收租" : intent === "sell" ? "來兜售物品" : "前來採購（種類需求）";
+            document.getElementById('cust-intent').className = intent === "sell" || intent === "rent" ? "text-cyan-300 font-semibold" : "text-amber-300 font-semibold";
+            document.getElementById('cust-dialogue').innerText = currentCustomer.dialogue;
+            
+            document.getElementById('cust-faction-badge').innerText = getFactionName(faction);
+            document.getElementById('deal-price-label').innerText = intent === 'buy' ? '顧客預算上限' : intent === 'rent' ? '本期房租' : '對方底價';
+            const qLine = document.getElementById('item-quality-line');
+            if (intent === 'sell') {
+                document.getElementById('item-title').innerText = item.name;
+                document.getElementById('item-size-tag').innerText = `${item.w}×${item.h}`;
+                document.getElementById('item-rarity').innerHTML = `稀有度: <span class="text-purple-400">${item.rarity}</span>`;
+                qLine.classList.remove('hidden');
+                qLine.innerHTML = `<span class="${qualityClass(item.quality)}">${formatQualityLine(item)}</span>`;
+                document.getElementById('item-icon-box').innerHTML = `<i class="fa-solid ${item.icon}"></i>`;
+            } else if (intent === 'rent') {
+                document.getElementById('item-title').innerText = '每週租金';
+                document.getElementById('item-size-tag').innerText = '—';
+                document.getElementById('item-rarity').innerText = `本期 ${gameState.rentAmount} G${gameState.rentArrears ? `｜欠租 ${gameState.rentArrears} G` : ''}`;
+                qLine.innerText = '每 7 天收取一次租金';
+                qLine.classList.remove('hidden');
+                document.getElementById('item-icon-box').innerHTML = `<i class="fa-solid fa-house"></i>`;
+            } else {
+                document.getElementById('item-title').innerText = `需求：${request.label}`;
+                document.getElementById('item-size-tag').innerText = request.kind === 'tag' ? `種類 ${request.tag}` : getFactionName(request.category);
+                document.getElementById('item-rarity').innerHTML = `<span class="text-cyan-300">拖曳符合物品至櫃台並點選</span>`;
+                qLine.classList.add('hidden');
+                document.getElementById('item-icon-box').innerHTML = `<i class="fa-solid fa-magnifying-glass"></i>`;
+            }
+            document.getElementById('deal-target-price').innerText = targetPrice;
+            document.getElementById('offer-price-input').value = targetPrice;
+            document.getElementById('deal-item-card').classList.toggle('hidden', intent === 'sell' && items.length > 1);
+            document.getElementById('offer-price-controls').classList.toggle('hidden', intent === 'rent');
+            document.getElementById('deal-action-buttons').classList.toggle('hidden', intent === 'rent');
+            document.getElementById('landlord-rent-actions').classList.toggle('hidden', intent !== 'rent');
+            if (intent === 'rent') renderLandlordActions();
+            if (intent === 'sell') {
+                selectedSellerItemIds = items.map(offeredItem => offeredItem.id);
+                renderSellerBundle(items);
+                updateSellerOfferPrice();
+            } else {
+                renderSellerBundle([]);
+            }
+            
+            updatePatienceBar();
+            gameState.dailyStats.customersToday++;
+            refreshUI();
+        }
+
+        function getFactionName(key) {
+            const map = { folk: "平民", guild: "冒險者公會", noble: "貴族王室", underworld: "黑市暗影" };
+            return map[key] || "無";
+        }
+
+        function renderSellerBundle(items) {
+            const container = document.getElementById('seller-bundle-list');
+            if (!container) return;
+            if (!currentCustomer || currentCustomer.intent !== 'sell' || items.length <= 1) {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+                return;
+            }
+            container.classList.remove('hidden');
+            const isAllSelected = selectedSellerItemIds.length === items.length;
+            const bundleSummary = isAllSelected
+                ? `全部收購折扣 ${(currentCustomer.bundleDiscount * 100).toFixed(1)}%（${currentCustomer.bundlePhrase}）`
+                : '點選商品卡片選擇收購項目';
+            container.innerHTML = `<div class="text-xs font-bold text-cyan-200">${bundleSummary}</div>` +
+                items.map(item => {
+                    const selected = selectedSellerItemIds.includes(item.id);
+                    return `<label class="relative flex items-center gap-3 p-3 rounded-xl border ${selected ? 'border-cyan-400 bg-cyan-950/50 ring-1 ring-cyan-500/50' : 'border-amber-900/40 bg-slate-950'} shadow-inner cursor-pointer transition">
+                        <input type="checkbox" class="accent-cyan-400 shrink-0" ${selected ? 'checked' : ''}
+                            onchange="toggleSellerBundleItem(${item.id})" aria-label="收購${item.name}">
+                        <div class="w-11 h-11 rounded-lg bg-amber-950/40 border border-amber-700/50 flex items-center justify-center text-amber-400 text-lg shrink-0">
+                            <i class="fa-solid ${item.icon}"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-bold text-amber-200 truncate">${item.name}</div>
+                            <div class="text-xs text-slate-400">尺寸: <span class="text-amber-400 font-bold">${item.w}×${item.h}</span> | 稀有度: <span class="text-purple-400">${item.rarity || '普通'}</span></div>
+                            <div class="text-xs mt-0.5 ${qualityClass(item.labelQuality)}">品質 ${getItemQualityLabel(item)}</div>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <div class="text-[10px] text-slate-400">對方底價</div>
+                            <div class="text-lg font-black gold-text">${item.askPrice} G</div>
+                        </div>
+                    </label>`;
+                }).join('');
+        }
+
+        function getSelectedSellerItems() {
+            if (!currentCustomer || currentCustomer.intent !== 'sell') return [];
+            return (currentCustomer.items || []).filter(item => selectedSellerItemIds.includes(item.id));
+        }
+
+        function getSelectedSellerAskTotal() {
+            const selected = getSelectedSellerItems();
+            return selected.reduce((total, item) => total + item.askPrice, 0);
+        }
+
+        function updateSellerOfferPrice() {
+            if (!currentCustomer || currentCustomer.intent !== 'sell') return;
+            const selected = getSelectedSellerItems();
+            const total = getSelectedSellerAskTotal();
+            const discount = selected.length > 1 && selected.length === currentCustomer.items.length
+                ? currentCustomer.bundleDiscount : 0;
+            document.getElementById('offer-price-input').value = Math.max(1, Math.round(total * (1 - discount)));
+        }
+
+        function toggleSellerBundleItem(itemId) {
+            const index = selectedSellerItemIds.indexOf(itemId);
+            if (index >= 0) selectedSellerItemIds.splice(index, 1);
+            else selectedSellerItemIds.push(itemId);
+            renderSellerBundle(currentCustomer.items);
+            updateSellerOfferPrice();
+        }
+
+        function isRentGiftEligible(item) {
+            const rarityRank = { 普通: 0, 稀有: 1, 史詩: 2, 傳說: 3 };
+            return (rarityRank[item.rarity] ?? -1) >= rarityRank.史詩 ||
+                qualityIndex(item.quality) >= qualityIndex('top');
+        }
+
+        function renderLandlordActions() {
+            const container = document.getElementById('landlord-rent-actions');
+            const totalDue = gameState.rentAmount + gameState.rentArrears;
+            const eligible = gameState.gridItems.filter(isRentGiftEligible);
+            container.innerHTML = `<p class="text-sm text-amber-200">每週租金 ${totalDue} G；本期 ${gameState.rentAmount} G${gameState.rentArrears ? `，累積欠租 ${gameState.rentArrears} G` : ''}</p>
+                <button onclick="payWeeklyRent()" ${gameState.gold < totalDue ? 'disabled' : ''} class="w-full py-2.5 rounded-lg font-bold text-sm ${gameState.gold < totalDue ? 'bg-slate-800 text-slate-500' : 'bg-amber-600 hover:bg-amber-500 text-slate-950'}">支付租金 ${totalDue} G（持有 ${gameState.gold} G）</button>
+                <p class="text-[10px] text-slate-400">也可交付一件史詩級以上或頂品以上貨架商品，將本期租金延至下週。</p>
+                <div class="flex flex-wrap gap-2">${eligible.map(item => `<button onclick="deferRentWithItem(${item.id})" class="px-2.5 py-1.5 rounded bg-purple-900 hover:bg-purple-800 text-purple-100 text-xs">${item.name}｜交付抵租</button>`).join('') || '<span class="text-[10px] text-slate-500">貨架上沒有符合抵租條件的物品。</span>'}</div>
+                ${gameState.gold < totalDue ? `<button onclick="deferRentForInsolvency()" class="w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-bold">資金不足，將本期租金記為欠租</button>` : ''}`;
+        }
+
+        function advanceRentSchedule() {
+            gameState.rentAmount = gameState.rentAmount < 3000
+                ? Math.min(3000, Math.ceil(gameState.rentAmount * 1.1))
+                : gameState.rentAmount + 3000;
+            gameState.rentCollectedDay = gameState.day;
+        }
+
+        function payWeeklyRent() {
+            if (!currentCustomer || currentCustomer.intent !== 'rent') return;
+            const totalDue = gameState.rentAmount + gameState.rentArrears;
+            if (gameState.gold < totalDue) {
+                alert('金幣不足，無法支付全部租金。');
+                return;
+            }
+            gameState.gold -= totalDue;
+            gameState.rentArrears = 0;
+            logMsg(`每週房租已繳清：${totalDue} G`);
+            completeLandlordVisit();
+        }
+
+        function deferRentWithItem(itemId) {
+            if (!currentCustomer || currentCustomer.intent !== 'rent') return;
+            const index = gameState.gridItems.findIndex(item => item.id === itemId);
+            if (index < 0 || !isRentGiftEligible(gameState.gridItems[index])) {
+                alert('只能交付貨架上的史詩級以上或頂品以上物品抵租。');
+                return;
+            }
+            const [item] = gameState.gridItems.splice(index, 1);
+            gameState.rentArrears += gameState.rentAmount;
+            logMsg(`交付《${item.name}》抵租，本期 ${gameState.rentAmount} G 延至下週；欠租累計 ${gameState.rentArrears} G`);
+            completeLandlordVisit();
+        }
+
+        function deferRentForInsolvency() {
+            if (!currentCustomer || currentCustomer.intent !== 'rent') return;
+            if (gameState.gold >= gameState.rentAmount + gameState.rentArrears) {
+                alert('目前金幣足以支付房租，請直接繳納或交付高階物品抵租。');
+                return;
+            }
+            gameState.rentArrears += gameState.rentAmount;
+            logMsg(`金幣不足，將本期 ${gameState.rentAmount} G 記為欠租；累計 ${gameState.rentArrears} G`);
+            completeLandlordVisit();
+        }
+
+        function completeLandlordVisit() {
+            advanceRentSchedule();
+            gameState.dailyStats.dealsToday++;
+            autoSaveAll();
+            refreshUI();
+            leaveCustomer();
+        }
+
+        function updatePatienceBar() {
+            if (!currentCustomer) return;
+            const bar = document.getElementById('cust-patience-bar');
+            bar.style.width = `${currentCustomer.patience}%`;
+        }
+
+        function quickOffer(mult) {
+            if (!currentCustomer) return;
+            const anchor = getNegotiationPriceAnchor();
+            const val = Math.round(anchor * mult);
+            document.getElementById('offer-price-input').value = val;
+        }
+
+        function findCurrentOfferItems() {
+            if (!currentCustomer || currentCustomer.intent !== 'buy') return [];
+            const selected = gameState.counterItems.filter(i =>
+                selectedOfferItemIds.includes(i.id) && itemMatchesRequest(i, currentCustomer.request)
+            );
+            if (selected.length > 0) return selected;
+            if (selectedOfferItemIds.length === 0 && currentCustomer.guestWaterItem) return [currentCustomer.guestWaterItem];
+            return [];
+        }
+
+        function getCurrentOfferMarketTotal() {
+            return findCurrentOfferItems().reduce((total, item) => total + item.price, 0);
+        }
+
+        function getNegotiationPriceAnchor() {
+            if (currentCustomer.intent === 'sell') {
+                const selected = getSelectedSellerItems();
+                const total = getSelectedSellerAskTotal();
+                const discount = selected.length > 1 && selected.length === currentCustomer.items.length
+                    ? currentCustomer.bundleDiscount : 0;
+                return Math.round(total * (1 - discount));
+            }
+            if (currentCustomer.intent === 'buy') {
+                const total = getCurrentOfferMarketTotal();
+                if (total > 0) return total;
+            }
+            return currentCustomer.targetPrice;
+        }
+
+        function prepareCustomerCupWater() {
+            if (!currentCustomer || !currentCustomer.hasCup || currentCustomer.guestWaterItem ||
+                !currentCustomer.request || currentCustomer.request.tag !== 'water') return false;
+            const maker = gameState.ownedWaterTools.some(tool => tool.id === 'water-maker' &&
+                gameState.gridItems.some(item => item.shopGoodId === 'water-maker') &&
+                gameState.professions.includes('waterMerchant') && gameState.waterProduction.makerUses < 3);
+            const faucet = gameState.gridItems.some(item => item.shopGoodId === 'faucet');
+            if (!maker && !faucet) return false;
+            let water;
+            if (maker) {
+                water = createWaterItem('water-maker', 0, 20);
+                gameState.waterProduction.makerUses++;
+            } else {
+                const isPoor = gameState.waterProduction.faucetPoorUses < 5;
+                water = createWaterItem('faucet', isPoor ? 8 : 12, 0);
+                gameState.waterProduction.faucetPoorUses++;
+            }
+            currentCustomer.guestWaterItem = water;
+            return true;
+        }
+
+        function submitDeal(action) {
+            if (!currentCustomer || customerResolutionPending) return;
+            if (currentCustomer.intent === 'rent') return;
+            if (action === 'reject') {
+                sfx.playReject();
+                logMsg(`謝絕了 [${currentCustomer.name}] 的交易。`);
+                adjustReputation(currentCustomer.faction, -2);
+                leaveCustomer();
+                return;
+            }
+
+            if (currentCustomer.intent === 'buy') {
+                if (findCurrentOfferItems().length === 0) prepareCustomerCupWater();
+                const offers = findCurrentOfferItems();
+                if (offers.length === 0) {
+                    alert(currentCustomer.hasCup && currentCustomer.request.tag === 'water'
+                        ? "目前沒有可用的水源或水杯，無法供應。"
+                        : "請先把符合需求的物品拖到櫃台，並點選要成交的物品（可多選）。");
+                    return;
+                }
+                if (offers.some(offer => inspectOfferedItem(currentCustomer, offer))) updateSelectedOfferPrice();
+                refreshUI();
+            }
+
+            const offerPrice = parseInt(document.getElementById('offer-price-input').value) || 0;
+            if (offerPrice <= 0) { alert("請輸入有效金額！"); return; }
+            const traitData = CUSTOMER_TRAITS[currentCustomer.trait];
+
+            const anchor = getNegotiationPriceAnchor();
+            const diffRatio = currentCustomer.intent === "sell"
+                ? (anchor - offerPrice) / anchor
+                : (offerPrice - anchor) / anchor;
+
+            if (diffRatio <= 0) {
+                executeDeal(offerPrice);
+                return;
+            }
+
+            const patienceLoss = Math.round((diffRatio * 100) / (traitData.patienceMult * (1 + gameState.upgrades.talk * 0.15)));
+            currentCustomer.patience -= Math.max(15, patienceLoss);
+            updatePatienceBar();
+
+            if (diffRatio <= traitData.marginTol) {
+                sfx.playCoin();
+                const acceptedPrice = currentCustomer.intent === 'buy'
+                    ? Math.min(offerPrice, currentCustomer.targetPrice)
+                    : offerPrice;
+                document.getElementById('cust-dialogue').innerText = `「好吧... 這個價格 (${acceptedPrice}G) 我可以接受！」`;
+                customerResolutionPending = true;
+                setTimeout(() => {
+                    customerResolutionPending = false;
+                    executeDeal(offerPrice);
+                }, 600);
+            } else {
+                if (currentCustomer.patience <= 0) {
+                    sfx.playReject();
+                    document.getElementById('cust-dialogue').innerText = `「太離譜了！這根本沒有誠意，我不談了！」`;
+                    adjustReputation(currentCustomer.faction, -3);
+                    customerResolutionPending = true;
+                    setTimeout(() => {
+                        customerResolutionPending = false;
+                        leaveCustomer();
+                    }, 1000);
+                } else {
+                    sfx.playReject();
+                    document.getElementById('cust-dialogue').innerText = `「不行！${offerPrice}G 太誇張了，再考慮考慮吧！」`;
+                }
+            }
+        }
+
+        function executeDeal(finalPrice) {
+            if (currentCustomer.intent === "sell") {
+                const sellerItems = getSelectedSellerItems();
+                if (sellerItems.length === 0) {
+                    alert('請選擇顧客帶來、要收購的物品。');
+                    return;
+                }
+                if (gameState.gold < finalPrice) {
+                    alert("金幣不足，無法收購！");
+                    return;
+                }
+
+                gameState.gold -= finalPrice;
+                const newItems = sellerItems.map((offeredItem, index) => {
+                    const newItem = { ...offeredItem, id: Date.now() + index };
+                    delete newItem.askPrice;
+                    ensureItemFields(newItem);
+                    return newItem;
+                });
+                gameState.counterItems.push(...newItems);
+
+                sfx.playCoin();
+                logMsg(`收購成功：花費 ${finalPrice}G 買入 ${newItems.length} 件《${newItems.map(newItem => newItem.name).join('、')}》`);
+                adjustReputation(currentCustomer.faction, +3);
+                if (currentCustomer.shopOwnerId) {
+                    const owner = SHOP_OWNER_VISITORS.find(visitor => visitor.id === currentCustomer.shopOwnerId);
+                    if (owner && !gameState.unlockedShopAddresses.includes(owner.id)) {
+                        gameState.unlockedShopAddresses.push(owner.id);
+                        gameState.metShopOwners.push(owner.id);
+                        logMsg(`${owner.name}完成交易，留下「${owner.shopName}」地址。`);
+                    }
+                }
+
+            } else {
+                const offers = findCurrentOfferItems();
+                if (offers.length === 0) {
+                    alert("請先把符合需求的物品拖到櫃台，並點選要成交的物品（可多選）。");
+                    return;
+                }
+                const marketPrice = offers.reduce((total, offer) => total + offer.price, 0);
+                const salePrice = Math.max(1, Math.min(finalPrice, marketPrice));
+                if (salePrice > currentCustomer.targetPrice) {
+                    alert(`顧客預算上限為 ${currentCustomer.targetPrice}G，請降低總出價或減少商品。`);
+                    return;
+                }
+
+                const soldNames = offers.map(offer => offer.name).join('、');
+                const soldQualities = offers.map(getItemQualityLabel).join('、');
+                const soldIds = new Set(offers.map(offer => offer.id));
+                const soldShopGoodIds = new Set(offers.map(offer => offer.shopGoodId).filter(Boolean));
+                gameState.counterItems = gameState.counterItems.filter(item => !soldIds.has(item.id));
+                gameState.ownedWaterTools = gameState.ownedWaterTools.filter(tool => !soldShopGoodIds.has(tool.id));
+                if (soldShopGoodIds.has('packaging-machine')) {
+                    gameState.packagingMachine = { packageItem: null, contents: [] };
+                }
+                gameState.gold += salePrice;
+
+                sfx.playCoin();
+                logMsg(`出售成功：${salePrice}G 賣出 ${offers.length} 件商品《${soldNames}》（${soldQualities}）`);
+                const priceRatio = salePrice / marketPrice;
+                const reputationGain = priceRatio < 0.8 ? 0.5
+                    : priceRatio < 0.9 ? 0.25
+                    : priceRatio <= 1.1 ? 0.1
+                    : priceRatio <= 1.2 ? 0.05
+                    : 0;
+                if (reputationGain > 0) adjustReputation(currentCustomer.faction, reputationGain);
+                selectedOfferItemIds = [];
+            }
+
+            gameState.dailyStats.dealsToday++;
+            autoSaveAll();
+            refreshUI();
+            leaveCustomer();
+        }
+
+        function leaveCustomer() {
+            currentCustomer = null;
+            selectedOfferItemIds = [];
+            selectedSellerItemIds = [];
+            customerResolutionPending = false;
+            document.getElementById('customer-active-area').classList.add('hidden');
+            document.getElementById('deal-action-buttons').classList.add('hidden');
+            document.getElementById('landlord-rent-actions').classList.add('hidden');
+            document.getElementById('seller-bundle-list').classList.add('hidden');
+            document.getElementById('no-customer-area').classList.remove('hidden');
+
+            if (gameState.customersRemaining <= 0) {
+                document.getElementById('no-cust-reason').innerText = "今日接待顧客額度已用完，請打烊結算！";
+                document.getElementById('btn-next-cust').classList.add('hidden');
+            } else {
+                document.getElementById('no-cust-reason').innerText = "店內無顧客，可迎接下一位。";
+                document.getElementById('btn-next-cust').classList.remove('hidden');
+            }
+        }
+
+        function adjustReputation(faction, delta) {
+            gameState.reputations[faction] = Math.max(-100, Math.min(100,
+                Math.round(((Number(gameState.reputations[faction]) || 0) + delta) * 100) / 100));
+            if (gameState.reputations[faction] >= 20 && !gameState.unlockedCamps.includes(faction)) {
+                gameState.unlockedCamps.push(faction);
+                logMsg(`${getFactionName(faction)}聲望達 +20，${MAINLINE_CAMPS[faction].name}已開放。`);
+            }
+            renderRep(faction);
+        }
+
+        function buyUpgrade(type) {
+            sfx.init();
+            if (type === 'grid') {
+                if (gameState.upgrades.grid >= 16) return;
+                const cost = getUpgradeCost('grid');
+                if (gameState.gold >= cost) {
+                    gameState.gold -= cost;
+                    gameState.upgrades.grid++;
+                    sfx.playUpgrade();
+                    logMsg(`貨架擴充：升級至 Lv ${gameState.upgrades.grid}`);
+                } else { alert("金幣不足！"); }
+            } else if (type === 'cust') {
+                const cost = getUpgradeCost('cust');
+                if (gameState.gold >= cost) {
+                    gameState.gold -= cost;
+                    gameState.upgrades.cust++;
+                    sfx.playUpgrade();
+                    logMsg(`客流量提升：每日顧客增加至 ${getCustMaxByLv(gameState.upgrades.cust)} 位`);
+                } else { alert("金幣不足！"); }
+            } else if (type === 'talk') {
+                const cost = getUpgradeCost('talk');
+                if (gameState.gold >= cost) {
+                    gameState.gold -= cost;
+                    gameState.upgrades.talk++;
+                    sfx.playUpgrade();
+                    logMsg(`談判技巧升級至 Lv ${gameState.upgrades.talk}`);
+                } else { alert("金幣不足！"); }
+            }
+            refreshUI();
+            autoSaveAll();
+        }
+
+        function finishDay() {
+            if (gameState.day % 7 === 0 && gameState.rentCollectedDay !== gameState.day) {
+                alert('今天是每週最後一天，請先迎接房東並處理本週房租。');
+                return;
+            }
+            if (currentCustomer) leaveCustomer();
+
+            const discardedCount = gameState.counterItems.length;
+            if (discardedCount > 0) {
+                document.getElementById('settle-counter-discard-row').classList.remove('hidden');
+                document.getElementById('settle-counter-discard-count').innerText = `${discardedCount} 件`;
+                logMsg(`⚠️ 櫃台有 ${discardedCount} 件物品逾期未擺放，已被清空報廢！`);
+                gameState.counterItems = [];
+            } else {
+                document.getElementById('settle-counter-discard-row').classList.add('hidden');
+            }
+
+            document.getElementById('settle-day-num').innerText = gameState.day;
+            document.getElementById('settle-cust-count').innerText = `${gameState.dailyStats.customersToday} 位`;
+            document.getElementById('settle-deals-count').innerText = `${gameState.dailyStats.dealsToday} 筆`;
+            document.getElementById('settle-rent-cost').innerText = gameState.day % 7 === 0
+                ? `本週已向房東結算`
+                : '本日不收租';
+            document.getElementById('settle-net-gold').innerText = `${gameState.gold} G`;
+
+            document.getElementById('modal-settlement').classList.remove('hidden');
+        }
+
+        function startNextDay() {
+            gameState.day++;
+            for (const tool of gameState.ownedWaterTools.filter(device => device.id === 'purifier')) {
+                for (const item of tool.storage.filter(stored => stored.processing && stored.readyDay <= gameState.day)) {
+                    processWaterWithTool(item, tool);
+                    item.processing = false;
+                    delete item.readyDay;
+                    logMsg(`《${item.name}》已完成一天的淨水過濾`);
+                }
+            }
+            gameState.dailyStats.customersToday = 0;
+            gameState.dailyStats.dealsToday = 0;
+            gameState.customerFactionQueue = createCustomerFactionQueue(gameState.maxCustomers);
+            gameState.customersRemaining = gameState.customerFactionQueue.length;
+            gameState.waterProduction = { day: gameState.day, makerUses: 0, faucetPoorUses: 0 };
+            selectedOfferItemIds = [];
+            selectedSellerItemIds = [];
+
+            document.getElementById('modal-settlement').classList.add('hidden');
+            document.getElementById('modal-outing').classList.add('hidden');
+            refreshUI();
+            autoSaveAll();
+            nextCustomer();
+        }
+
+        function logMsg(msg) {
+            const box = document.getElementById('game-log-box');
+            const item = document.createElement('div');
+            item.className = "text-slate-300";
+            item.innerText = `[${new Date().toLocaleTimeString().slice(0, 5)}] ${msg}`;
+            box.appendChild(item);
+            box.scrollTop = box.scrollHeight;
+        }
+    </script>
+</body>
+</html>
