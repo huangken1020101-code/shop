@@ -193,33 +193,24 @@
             </div>
 
             <!-- 帳號輸入 -->
-            <div class="mb-6 text-left">
+            <div class="mb-4 text-left">
                 <label class="block text-xs font-bold text-slate-300 mb-2">
                     <i class="fa-solid fa-key text-amber-400 mr-1"></i> 請輸入 ST 帳號或 Gmail
                 </label>
-                <div class="flex gap-2">
-                    <input type="text" id="account-input" placeholder="例如: st109001 或 hero@gmail.com" 
-                           class="flex-1 bg-slate-950 border border-slate-700 focus:border-amber-500 focus:outline-none rounded-lg px-3.5 py-2.5 text-slate-100 text-xs sm:text-sm font-mono transition">
-                    <button onclick="saveAndBindAccount()" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs sm:text-sm rounded-lg transition shadow-md flex items-center gap-1.5 whitespace-nowrap">
-                        <i class="fa-solid fa-check"></i> 確定綁定
-                    </button>
-                </div>
+                <input type="text" id="account-input" placeholder="例如: st109001 或 hero@gmail.com" 
+                       class="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 focus:outline-none rounded-lg px-3.5 py-2.5 text-slate-100 text-xs sm:text-sm font-mono transition">
             </div>
 
             <!-- 主選單按鈕 -->
-            <div class="space-y-3">
-                <button onclick="startGameFromHome(false)" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black text-base sm:text-lg transition shadow-lg shadow-amber-900/30 flex items-center justify-center gap-2 pulse-btn">
-                    <i class="fa-solid fa-play"></i> 開店營業
+            <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-700/80 space-y-3">
+                <button id="btn-bind-cloud-open" onclick="bindCheckAndStartGame()" class="w-full py-4 px-5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black text-base sm:text-lg transition shadow-lg shadow-amber-900/30 flex items-center justify-center gap-2 pulse-btn">
+                    <i class="fa-solid fa-play"></i> 綁定帳號・檢查雲端並開店
                 </button>
-                
-                <div class="grid grid-cols-2 gap-3">
-                    <button onclick="fetchCloudDataModal()" class="py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-cloud-arrow-down text-cyan-400"></i> 雲端存檔檢測
-                    </button>
+            </div>
+            <div class="mt-3">
                     <button onclick="confirmResetGame()" class="py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-rose-950 border border-slate-600 hover:border-rose-700 text-slate-300 hover:text-rose-200 text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2">
                         <i class="fa-solid fa-rotate-left text-rose-400"></i> 重設新紀錄
                     </button>
-                </div>
             </div>
         </div>
     </div>
@@ -279,6 +270,9 @@
                 <button onclick="switchTab('shop')" id="tab-btn-shop" class="nav-tab-active flex-1 min-w-[120px] py-3 px-4 border-b-2 border-transparent font-bold text-xs sm:text-sm text-slate-400 hover:text-amber-300 transition flex items-center justify-center gap-2">
                     <i class="fa-solid fa-store text-base"></i> 商店營業 (顧客/貨架/櫃台)
                 </button>
+                <button onclick="switchTab('industry')" id="tab-btn-industry" class="flex-1 min-w-[120px] py-3 px-4 border-b-2 border-transparent font-bold text-xs sm:text-sm text-slate-400 hover:text-amber-300 transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-seedling text-base"></i> 農業與採礦
+                </button>
                 <button onclick="switchTab('reputation')" id="tab-btn-reputation" class="flex-1 min-w-[120px] py-3 px-4 border-b-2 border-transparent font-bold text-xs sm:text-sm text-slate-400 hover:text-amber-300 transition flex items-center justify-center gap-2">
                     <i class="fa-solid fa-shield-halved text-base"></i> 四大陣營聲望
                 </button>
@@ -320,6 +314,13 @@
                                 <!-- Dynamic Cells & Items -->
                             </div>
                         </div>
+                    </div>
+
+                    <div id="store-components-panel" class="hidden bg-slate-900 border border-blue-500/40 rounded-2xl p-4 shadow-xl">
+                        <h3 class="text-xs sm:text-sm font-bold text-blue-300 mb-2">
+                            <i class="fa-solid fa-screwdriver-wrench mr-1"></i> 店面部件（不占貨架）
+                        </h3>
+                        <div id="store-components-list"></div>
                     </div>
 
                     <!-- 櫃台臨櫃暫存區 (僅能放1天) -->
@@ -439,6 +440,19 @@
                     </div>
                 </div>
 
+            </div>
+
+            <div id="view-tab-industry" class="hidden space-y-6">
+                <section class="bg-slate-900 border border-blue-500/30 rounded-2xl p-5 shadow-xl">
+                    <h2 class="text-lg font-black text-blue-300 mb-1"><i class="fa-solid fa-seedling mr-2"></i>農夫工作區</h2>
+                    <p class="text-xs text-slate-400 mb-4">購買種子後放入農業設備；生長完成自動收成。藍色標示為商店購買物品。</p>
+                    <div id="farm-workshop" class="space-y-3"></div>
+                </section>
+                <section class="bg-slate-900 border border-blue-500/30 rounded-2xl p-5 shadow-xl">
+                    <h2 class="text-lg font-black text-blue-300 mb-1"><i class="fa-solid fa-hammer mr-2"></i>礦工工作區</h2>
+                    <p class="text-xs text-slate-400 mb-4">選擇礦區並啟動設備；開採成果可上架出售。</p>
+                    <div id="mining-workshop" class="space-y-3"></div>
+                </section>
             </div>
 
             <!-- 【分頁 2】：陣營聲望 (專屬畫面) -->
@@ -750,6 +764,13 @@
             professions: [],
             ownedWaterTools: [],
             ownedWaterComponents: [],
+            farmFacilities: [],
+            farmSeeds: [],
+            farmModules: {},
+            farmProduce: [],
+            miningFacilities: [],
+            miningModules: {},
+            miningProduce: [],
             packagingMachine: { packageItem: null, contents: [] },
             rentAmount: 300,
             rentArrears: 0,
@@ -850,6 +871,20 @@
                 name: '店面部件商人',
                 faction: 'noble',
                 item: { name: '黃銅水龍頭樣品', category: 'noble', rarity: '普通', baseValue: 20, icon: 'fa-faucet', w: 1, h: 1, tags: ['component', 'noble'] }
+            },
+            {
+                id: 'farm-shop',
+                shopName: '農業器具商店',
+                name: '農業器具商人',
+                faction: 'folk',
+                item: { name: '神奇種子樣品', category: 'folk', rarity: '普通', baseValue: 20, icon: 'fa-seedling', w: 1, h: 1, tags: ['farm', 'folk'] }
+            },
+            {
+                id: 'mining-shop',
+                shopName: '礦業器具商店',
+                name: '礦業器具商人',
+                faction: 'guild',
+                item: { name: '礦石樣品', category: 'guild', rarity: '普通', baseValue: 20, icon: 'fa-hammer', w: 1, h: 1, tags: ['mining', 'guild'] }
             }
         ];
 
@@ -876,12 +911,166 @@
                 { id: 'mana-pill', name: '魔力藥丸', price: 180, icon: 'fa-tablets', description: '一次性增加 5 點魔力。' }
             ],
             'profession-shop': [
-                { id: 'water-manual', name: '水商手則', price: 2000, icon: 'fa-book-open', description: '取得水商職業，解鎖水商器具購買資格。' }
+                { id: 'water-manual', name: '水商手則', price: 2000, icon: 'fa-book-open', description: '取得水商職業，解鎖水商器具購買資格。', professionManual: 'waterMerchant' },
+                { id: 'farmer-manual', name: '農夫手則', price: 3200, icon: 'fa-book-open', description: '取得農夫職業，解鎖農業設備與種子。', professionManual: 'farmer' },
+                { id: 'miner-manual', name: '礦工手則', price: 5800, icon: 'fa-book-open', description: '取得礦工職業，解鎖採礦設備與礦區。', professionManual: 'miner' }
             ],
             'component-shop': [
-                { id: 'faucet', name: '水龍頭', price: 80, icon: 'fa-faucet', description: '功能道具：可放在貨架使用；每日前 5 杯劣品，其後為廢品。', functional: true, w: 2, h: 1 }
+                { id: 'faucet', name: '水龍頭', price: 80, icon: 'fa-faucet', description: '店面部件，不占貨架；每日前 5 杯劣品，其後可接無限廢品水。', functional: true, w: 2, h: 1 }
+            ],
+            'farm-shop': [
+                { id: 'seed-wheat', name: '小麥種子', price: 8, icon: 'fa-wheat-awn', kind: 'farm-seed', crop: 'wheat', growDays: 1, yield: 3, baseValue: 15 },
+                { id: 'seed-carrot', name: '胡蘿蔔種子', price: 10, icon: 'fa-carrot', kind: 'farm-seed', crop: 'carrot', growDays: 1, yield: 3, baseValue: 20 },
+                { id: 'seed-potato', name: '馬鈴薯種子', price: 10, icon: 'fa-cookie-bite', kind: 'farm-seed', crop: 'potato', growDays: 2, yield: 3, baseValue: 20 },
+                { id: 'seed-tomato', name: '番茄種子', price: 12, icon: 'fa-apple-whole', kind: 'farm-seed', crop: 'tomato', growDays: 2, yield: 3, baseValue: 25 },
+                { id: 'seed-strawberry', name: '草莓種子', price: 20, icon: 'fa-strawberry', kind: 'farm-seed', crop: 'strawberry', growDays: 3, yield: 2, baseValue: 40 },
+                { id: 'seed-pumpkin', name: '南瓜種子', price: 30, icon: 'fa-pumpkin', kind: 'farm-seed', crop: 'pumpkin', growDays: 4, yield: 2, baseValue: 60 },
+                { id: 'seed-magic-flower', name: '魔力花種子', price: 75, icon: 'fa-spa', kind: 'farm-seed', crop: 'magicFlower', growDays: 5, yield: 2, baseValue: 150, magic: true, requires: ['advanced-farm', 'magic-pot', 'world-tree'] },
+                { id: 'seed-moon-grass', name: '月光草種子', price: 150, icon: 'fa-moon', kind: 'farm-seed', crop: 'moonGrass', growDays: 7, yield: 2, baseValue: 300, magic: true, requires: ['advanced-farm', 'magic-pot', 'world-tree'] },
+                { id: 'seed-world-tree', name: '世界樹種子', price: 2500, icon: 'fa-tree', kind: 'farm-seed', crop: 'worldTree', growDays: 14, yield: 1, baseValue: 5000, magic: true, requires: ['world-tree'] },
+                { id: 'small-pot', name: '小型花盆', price: 150, icon: 'fa-seedling', kind: 'farm-facility', facility: 'small-pot', w: 2, h: 2, description: '小型農業設備（2×2），每顆種子收成 ×0.5。' },
+                { id: 'ordinary-farm', name: '普通農田', price: 400, icon: 'fa-tractor', kind: 'farm-facility', facility: 'ordinary-farm', storeComponent: true, description: '店面農業部件，每顆種子收成 ×1。' },
+                { id: 'advanced-farm', name: '高級農田', price: 1000, icon: 'fa-tractor', kind: 'farm-facility', facility: 'advanced-farm', storeComponent: true, description: '店面農業部件，每顆種子收成 ×1.25，品質至少中品。' },
+                { id: 'magic-pot', name: '魔力花盆', price: 1500, icon: 'fa-wand-sparkles', kind: 'farm-facility', facility: 'magic-pot', w: 2, h: 2, description: '魔力作物品質提升（2×2）。' },
+                { id: 'world-tree', name: '世界樹培養器', price: 50000, icon: 'fa-tree', kind: 'farm-facility', facility: 'world-tree', w: 4, h: 4, description: '品質頂品；非世界樹種子生長時間減半（4×4）。' },
+                { id: 'auto-greenhouse', name: '自動溫室', price: 3000, icon: 'fa-temperature-high', kind: 'farm-module', module: 'auto-greenhouse' },
+                { id: 'magic-greenhouse', name: '魔力溫室', price: 8000, icon: 'fa-house', kind: 'farm-module', module: 'magic-greenhouse' },
+                { id: 'sprinkler', name: '小型灑水器', price: 100, icon: 'fa-faucet-drip', kind: 'farm-module', module: 'sprinkler' },
+                { id: 'fertilizer', name: '施肥器', price: 200, icon: 'fa-bottle-droplet', kind: 'farm-module', module: 'fertilizer' },
+                { id: 'bug-lamp', name: '捕蟲燈', price: 350, icon: 'fa-bug-slash', kind: 'farm-module', module: 'bug-lamp' },
+                { id: 'sun-lamp', name: '日照燈', price: 500, icon: 'fa-sun', kind: 'farm-module', module: 'sun-lamp' },
+                { id: 'auto-seeder', name: '自動播種器', price: 800, icon: 'fa-gears', kind: 'farm-module', module: 'auto-seeder' },
+                { id: 'magic-soil', name: '魔力土壤', price: 1500, icon: 'fa-mound', kind: 'farm-module', module: 'magic-soil' },
+                { id: 'irrigation', name: '高級灌溉系統', price: 2000, icon: 'fa-water', kind: 'farm-module', module: 'irrigation' },
+                { id: 'harvest-rune', name: '豐收符文', price: 5000, icon: 'fa-rune', kind: 'farm-module', module: 'harvest-rune' }
+            ],
+            'mining-shop': [
+                { id: 'small-miner', name: '小型採礦台', price: 250, icon: 'fa-hammer', kind: 'mining-facility', facility: 'small-miner', w: 3, h: 3, description: '每天取得 1 個普通礦石（3×3）。' },
+                { id: 'ordinary-mine', name: '普通礦坑', price: 600, icon: 'fa-mountain', kind: 'mining-facility', facility: 'ordinary-mine', storeComponent: true, description: '每天取得 3 個普通礦石。' },
+                { id: 'deep-mine', name: '深層礦坑', price: 2000, icon: 'fa-mountain-sun', kind: 'mining-facility', facility: 'deep-mine', storeComponent: true, description: '每天取得 3 個較好的礦石。' },
+                { id: 'mana-miner', name: '魔力採礦機', price: 4000, icon: 'fa-wand-sparkles', kind: 'mining-facility', facility: 'mana-miner', storeComponent: true, description: '每天取得 2 個魔礦。' },
+                { id: 'auto-drill', name: '自動鑽探機', price: 7000, icon: 'fa-screwdriver-wrench', kind: 'mining-facility', facility: 'auto-drill', storeComponent: true, description: '每天取得 2 個較好的魔礦。' },
+                { id: 'crystal-miner', name: '水晶挖掘機', price: 12000, icon: 'fa-gem', kind: 'mining-facility', facility: 'crystal-miner', storeComponent: true, interval: 3, amount: 7, description: '每 3 天取得 7 顆水晶。' },
+                { id: 'void-drill', name: '虛空鑽探機', price: 50000, icon: 'fa-meteor', kind: 'mining-facility', facility: 'void-drill', storeComponent: true, interval: 5, amount: 6, description: '每 5 天取得 6 個虛空礦。' },
+                { id: 'reinforced-drill', name: '強化鑽頭', price: 200, kind: 'mining-module', module: 'reinforced-drill' },
+                { id: 'ore-detector', name: '礦脈探測器', price: 500, kind: 'mining-module', module: 'ore-detector' },
+                { id: 'lighting-equipment', name: '照明設備', price: 300, kind: 'mining-module', module: 'lighting-equipment' },
+                { id: 'ore-sifter', name: '碎石篩選器', price: 800, kind: 'mining-module', module: 'ore-sifter' },
+                { id: 'conveyor', name: '自動運輸帶', price: 1200, kind: 'mining-module', module: 'conveyor' },
+                { id: 'mana-detector', name: '魔力探測器', price: 2000, kind: 'mining-module', module: 'mana-detector' },
+                { id: 'deep-drill-system', name: '深層鑽探系統', price: 5000, kind: 'mining-module', module: 'deep-drill-system' },
+                { id: 'vein-rune', name: '礦脈符文', price: 8000, kind: 'mining-module', module: 'vein-rune' }
             ]
         };
+
+        const FARM_SEEDS = Object.fromEntries(SHOP_CATALOG['farm-shop']
+            .filter(good => good.kind === 'farm-seed').map(good => [good.crop, good]));
+        const FARM_FACILITY_RULES = {
+            'small-pot': { yieldMultiplier: 0.5, size: '2×2' },
+            'ordinary-farm': { yieldMultiplier: 1, size: '店面部件' },
+            'advanced-farm': { yieldMultiplier: 1.25, size: '店面部件', minQuality: 4 },
+            'magic-pot': { yieldMultiplier: 1, size: '2×2', magicBonus: 10 },
+            'world-tree': { yieldMultiplier: 1, size: '4×4', minQuality: 8, worldTreeBonus: true }
+        };
+        const FARM_MODULE_LABELS = {
+            'auto-greenhouse': '自動溫室', 'magic-greenhouse': '魔力溫室',
+            sprinkler: '小型灑水器', fertilizer: '施肥器', 'bug-lamp': '捕蟲燈',
+            'sun-lamp': '日照燈', 'auto-seeder': '自動播種器',
+            'magic-soil': '魔力土壤', irrigation: '高級灌溉系統', 'harvest-rune': '豐收符文'
+        };
+        const MINING_ORES = [
+            { id: 'coal', name: '煤礦', baseValue: 10, icon: 'fa-cube' },
+            { id: 'copper', name: '銅礦石', baseValue: 15, icon: 'fa-cube' },
+            { id: 'iron', name: '鐵礦石', baseValue: 20, icon: 'fa-cube' },
+            { id: 'silver', name: '銀礦石', baseValue: 40, icon: 'fa-cube' },
+            { id: 'gold', name: '金礦石', baseValue: 90, icon: 'fa-cube' },
+            { id: 'mana-ore', name: '魔力礦石', baseValue: 200, icon: 'fa-wand-sparkles' },
+            { id: 'crystal', name: '魔法晶石', baseValue: 400, icon: 'fa-gem' },
+            { id: 'void-ore', name: '虛空礦石', baseValue: 1000, icon: 'fa-meteor' },
+            { id: 'life-crystal', name: '生命水晶', baseValue: 2200, icon: 'fa-heart' }
+        ];
+        const MINING_FACILITY_RULES = {
+            'small-miner': { interval: 1, amount: 1, table: [['coal', 0.75], ['copper', 0.125], ['iron', 0.06], ['silver', 0.04], ['gold', 0.025]] },
+            'ordinary-mine': { interval: 1, amount: 3, table: [['coal', 0.5], ['copper', 0.25], ['iron', 0.15], ['silver', 0.075], ['gold', 0.025]] },
+            'deep-mine': { interval: 1, amount: 3, table: [['iron', 0.5], ['silver', 0.25], ['gold', 0.125], ['copper', 0.125]] },
+            'mana-miner': { interval: 1, amount: 2, table: [['mana-ore', 0.9], ['crystal', 0.1]] },
+            'auto-drill': { interval: 1, amount: 2, table: [['mana-ore', 0.5], ['crystal', 0.5]] },
+            'crystal-miner': { interval: 3, amount: 7, table: [['crystal', 0.99], ['life-crystal', 0.01]] },
+            'void-drill': { interval: 5, amount: 6, table: [['void-ore', 0.8], ['life-crystal', 0.2]] }
+        };
+        const MINING_MODULE_LABELS = {
+            'reinforced-drill': '強化鑽頭', 'ore-detector': '礦脈探測器',
+            'lighting-equipment': '照明設備', 'ore-sifter': '碎石篩選器',
+            conveyor: '自動運輸帶', 'mana-detector': '魔力探測器',
+            'deep-drill-system': '深層鑽探系統', 'vein-rune': '礦脈符文'
+        };
+        const MINING_AREAS = [
+            {
+                id: 'foothills', name: '青石山麓', purity: [8, 24],
+                news: [
+                    '山麓近來常有石屑落在舊步道上，巡山人提醒夜間小心。',
+                    '有礦工說東側坑道的回音和往常不太一樣。',
+                    '青石山麓的挑夫最近改走南邊小路，原因眾說紛紜。',
+                    '有人在山腳看見幾盞燈火，隔天卻找不到營火痕跡。'
+                ]
+            },
+            {
+                id: 'iron-ridge', name: '赤鐵山脊', purity: [18, 35],
+                news: [
+                    '山脊附近的鐵器容易沾上紅褐色粉末，來源至今沒人說得準。',
+                    '幾名工人提到最近山風裡有股金屬味，是真是假無從查證。',
+                    '赤鐵山脊的舊路標被人轉了方向，巡山隊還在確認。',
+                    '山脊附近的商販說最近常有人打聽廢棄礦坑的位置。'
+                ]
+            },
+            {
+                id: 'mana-cavern', name: '幽藍魔窟', purity: [28, 44],
+                news: [
+                    '有探勘隊說指南針在洞口附近偶爾會偏一下，可能只是受潮。',
+                    '洞內最近傳出低鳴聲，守夜人認為是風穿過裂縫所致。',
+                    '幽藍魔窟附近的苔蘚夜裡看起來較亮，有人說是月色造成的。',
+                    '一支探勘隊提早回到鎮上，對遇到的事只字未提。'
+                ]
+            },
+            {
+                id: 'crystal-field', name: '月晶荒原', purity: [35, 50],
+                news: [
+                    '旅人說月光下地面會閃一下，隔天再看卻什麼也找不到。',
+                    '最近荒原附近的商隊延誤不少，據說只是道路泥濘。',
+                    '月晶荒原的夜鳥這幾天不太願意靠近舊營地。',
+                    '有旅人聲稱在荒原撿到一枚發亮的石子，後來才發現是玻璃。'
+                ]
+            }
+        ];
+        const MINING_NOISE_NEWS = [
+            '附近市集的燈油價格又漲了，礦工們抱怨照明成本增加。',
+            '山路上有一隻走失的驢子，至今還沒人找到。',
+            '最近酒館的蘑菇湯特別受歡迎，和採礦似乎沒什麼關係。',
+            '巡山人提醒大家避開午後雷雨，消息來源是山腳的牧羊人。'
+        ];
+
+        function getMiningAreaNews(area) {
+            const areaIndex = MINING_AREAS.indexOf(area);
+            let seed = Math.abs((Number(gameState.day) || 1) * 31 + areaIndex * 17) || 1;
+            const random = () => {
+                seed = (seed * 1664525 + 1013904223) >>> 0;
+                return seed / 4294967296;
+            };
+            const shuffle = entries => {
+                const result = [...entries];
+                for (let index = result.length - 1; index > 0; index--) {
+                    const swapIndex = Math.floor(random() * (index + 1));
+                    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+                }
+                return result;
+            };
+            const count = 3 + Math.floor(random() * 3);
+            const localCount = 1 + Math.floor(random() * 2);
+            return shuffle([
+                ...shuffle(area.news).slice(0, localCount),
+                ...shuffle(MINING_NOISE_NEWS).slice(0, count - localCount)
+            ]);
+        }
 
         function qualityIndex(q) {
             const i = QUALITY_KEYS.indexOf(q || 'mid');
@@ -1028,6 +1217,9 @@
         function migrateGameState() {
             (gameState.gridItems || []).forEach(ensureItemFields);
             (gameState.counterItems || []).forEach(ensureItemFields);
+            for (const item of [...(gameState.gridItems || []), ...(gameState.counterItems || [])]) {
+                if (item.shopGoodId || item.functional) item.shopPurchased = true;
+            }
             if (!gameState.reputations) gameState.reputations = {};
             if (!gameState.reputationVersion) {
                 const legacyStartingReputation = { folk: 30, guild: 20, noble: 10, underworld: 5 };
@@ -1038,9 +1230,20 @@
                 gameState.reputationVersion = 2;
             }
             if (!Array.isArray(gameState.customerFactionQueue)) gameState.customerFactionQueue = [];
-            for (const key of ['unlockedShopAddresses', 'metShopOwners', 'professions', 'ownedWaterTools', 'ownedWaterComponents']) {
+            for (const key of ['unlockedShopAddresses', 'metShopOwners', 'professions', 'ownedWaterTools', 'ownedWaterComponents',
+                'farmFacilities', 'farmSeeds', 'farmProduce', 'miningFacilities', 'miningProduce']) {
                 if (!Array.isArray(gameState[key])) gameState[key] = [];
             }
+            if (!gameState.farmModules || typeof gameState.farmModules !== 'object') gameState.farmModules = {};
+            if (!gameState.miningModules || typeof gameState.miningModules !== 'object') gameState.miningModules = {};
+            gameState.farmFacilities.forEach(facility => {
+                if (!Array.isArray(facility.modules)) facility.modules = [];
+                if (!Number.isFinite(Number(facility.soilScore))) facility.soilScore = 8;
+            });
+            gameState.miningFacilities.forEach(facility => {
+                if (!Array.isArray(facility.modules)) facility.modules = [];
+                if (!Number.isFinite(Number(facility.progressDays))) facility.progressDays = 0;
+            });
             if (!gameState.packagingMachine || typeof gameState.packagingMachine !== 'object') {
                 gameState.packagingMachine = { packageItem: null, contents: [] };
             }
@@ -1055,6 +1258,12 @@
             }
             if (!gameState.campIntel) gameState.campIntel = {};
             if (!gameState.waterProduction) gameState.waterProduction = { day: gameState.day || 1, makerUses: 0, faucetPoorUses: 0 };
+            if (gameState.gridItems.some(item => item.shopGoodId === 'faucet')) {
+                if (!gameState.ownedWaterComponents.includes('faucet')) {
+                    gameState.ownedWaterComponents.push('faucet');
+                }
+                gameState.gridItems = gameState.gridItems.filter(item => item.shopGoodId !== 'faucet');
+            }
             gameState.ownedWaterTools.forEach(tool => {
                 if (!Array.isArray(tool.storage)) tool.storage = [];
                 if (!Array.isArray(tool.filters)) tool.filters = tool.id === 'purifier' ? ['sediment'] : [];
@@ -1077,6 +1286,16 @@
             if (request.kind === 'tag') return (item.tags || []).includes(request.tag);
             if (request.kind === 'category') return item.category === request.category;
             return false;
+        }
+
+        function getCustomerRequests(customer) {
+            if (!customer) return [];
+            const requests = Array.isArray(customer.requests) ? customer.requests : [customer.request];
+            return requests.filter(Boolean);
+        }
+
+        function itemMatchesCustomerRequest(item, customer) {
+            return getCustomerRequests(customer).some(request => itemMatchesRequest(item, request));
         }
 
         function getForgeryDetectionChance(customer, item) {
@@ -1202,6 +1421,71 @@
             sfx.playBell();
         }
 
+        async function bindCheckAndStartGame() {
+            sfx.init();
+            const button = document.getElementById('btn-bind-cloud-open');
+            const cleanAcc = formatAccount(document.getElementById('account-input').value);
+            if (!cleanAcc) {
+                alert('請輸入 ST 帳號或 Gmail！');
+                return;
+            }
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 綁定並檢查雲端中…';
+            try {
+                gameState.account = cleanAcc;
+                document.getElementById('account-input').value = cleanAcc;
+                localStorage.setItem('fantasy_shop_account', cleanAcc);
+                updateAccountDisplay(cleanAcc);
+
+                const localData = localStorage.getItem(`fantasy_shop_save_${cleanAcc}`);
+                if (localData) {
+                    try {
+                        gameState = mergeSaveDefaults(DEFAULT_STATE, JSON.parse(localData));
+                        gameState.account = cleanAcc;
+                    } catch (error) {
+                        console.error('Local save load failed:', error);
+                        alert(`本機存檔讀取失敗，將以新紀錄開店：${error.message}`);
+                        gameState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+                        gameState.account = cleanAcc;
+                    }
+                } else {
+                    gameState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+                    gameState.account = cleanAcc;
+                }
+
+                if (db) {
+                    try {
+                        const snapshot = await db.collection('shop_saves').doc(cleanAcc).get();
+                        if (snapshot.exists) {
+                            const cloudState = normalizeCloudSave(snapshot.data(), cleanAcc);
+                            if (confirm(`找到雲端存檔（第 ${cloudState.day} 天，${cloudState.gold} G），要載入雲端進度嗎？`)) {
+                                gameState = cloudState;
+                                localStorage.setItem(`fantasy_shop_save_${cleanAcc}`, JSON.stringify(gameState));
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Cloud load failed:', error);
+                        alert(`雲端存檔檢測失敗，將使用本機進度開店：${error.message}`);
+                    }
+                } else {
+                    alert('Firebase 未連線，本次將使用本機存檔開店。');
+                }
+
+                document.getElementById('screen-home').classList.add('hidden');
+                document.getElementById('screen-game').classList.remove('hidden');
+                migrateGameState();
+                refreshUI();
+                nextCustomer();
+                sfx.playBell();
+            } catch (error) {
+                console.error('Unable to bind account and start game:', error);
+                alert(`無法開店：${error.message}`);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fa-solid fa-play"></i> 綁定帳號・檢查雲端並開店';
+            }
+        }
+
         function returnToHome() {
             autoSaveAll();
             document.getElementById('screen-game').classList.add('hidden');
@@ -1215,7 +1499,7 @@
         // 分頁切換邏輯
         function switchTab(tabName) {
             sfx.init();
-            const tabs = ['shop', 'reputation', 'upgrades', 'logs'];
+            const tabs = ['shop', 'industry', 'reputation', 'upgrades', 'logs'];
             tabs.forEach(t => {
                 document.getElementById(`view-tab-${t}`).classList.add('hidden');
                 document.getElementById(`tab-btn-${t}`).classList.remove('nav-tab-active');
@@ -1223,6 +1507,7 @@
 
             document.getElementById(`view-tab-${tabName}`).classList.remove('hidden');
             document.getElementById(`tab-btn-${tabName}`).classList.add('nav-tab-active');
+            if (tabName === 'industry') renderIndustryWorkshops();
         }
 
         function autoSaveAll() {
@@ -1383,6 +1668,8 @@
             document.getElementById('cost-upg-talk').innerText = getUpgradeCost('talk');
 
             renderCounterList();
+            renderStoreComponents();
+            renderIndustryWorkshops();
             renderGridShelf();
         }
 
@@ -1391,13 +1678,9 @@
                 'water-maker': { name: '造水機', price: 2400, icon: 'fa-faucet-drip', w: 2, h: 2 },
                 purifier: { name: '淨水器', price: 180, icon: 'fa-filter', w: 2, h: 2 },
                 'mana-pool': { name: '微型魔力池', price: 2200, icon: 'fa-wand-sparkles', w: 2, h: 2 },
-                compressor: { name: '聚魔機', price: 5000, icon: 'fa-compress', w: 2, h: 2 },
-                faucet: { name: '水龍頭', price: 80, icon: 'fa-faucet', w: 2, h: 1 }
+                compressor: { name: '聚魔機', price: 5000, icon: 'fa-compress', w: 2, h: 2 }
             };
-            const deviceIds = [
-                ...gameState.ownedWaterTools.map(tool => tool.id),
-                ...(gameState.ownedWaterComponents.includes('faucet') ? ['faucet'] : [])
-            ];
+            const deviceIds = gameState.ownedWaterTools.map(tool => tool.id);
             for (const id of deviceIds) {
                 if (gameState.gridItems.some(item => item.shopGoodId === id)) continue;
                 const config = configs[id];
@@ -1407,11 +1690,42 @@
                     ...config, id: Date.now() + Math.floor(Math.random() * 1000000),
                     category: 'folk', rarity: '普通', quality: 'mid', labelQuality: 'mid',
                     baseValue: config.price, price: config.price, functional: true,
-                    shopGoodId: id, tags: ['tool', 'folk', 'functional'], ...position
+                    shopPurchased: true, shopGoodId: id, tags: ['tool', 'folk', 'functional'], ...position
                 };
                 gameState.gridItems.push(item);
                 logMsg(`已將舊存檔中的${config.name}放回貨架供操作`);
             }
+        }
+
+        function renderStoreComponents() {
+            const panel = document.getElementById('store-components-panel');
+            const container = document.getElementById('store-components-list');
+            const hasFaucet = gameState.ownedWaterComponents.includes('faucet');
+            const farms = gameState.farmFacilities.filter(facility =>
+                ['ordinary-farm', 'advanced-farm'].includes(facility.type));
+            const mines = gameState.miningFacilities.filter(facility =>
+                MINING_FACILITY_RULES[facility.type] && facility.type !== 'small-miner');
+            const components = [
+                ...(hasFaucet ? [`<div class="p-3 rounded-xl border border-blue-500/40 bg-slate-950/80 text-blue-100"
+                        ondragover="allowWaterToolDrop(event)" ondrop="handleWaterToolDrop(event, 'faucet')">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-blue-950/60 border border-blue-500/40 flex items-center justify-center text-blue-300">
+                            <i class="fa-solid fa-faucet"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-bold">水龍頭</div>
+                            <div class="text-xs text-slate-400">今日劣品 ${gameState.waterProduction.faucetPoorUses}/5 杯；之後可接無限廢品水。</div>
+                            <div class="text-[10px] text-blue-200 mt-1">將貨架上的空杯拖到此部件即可裝水。</div>
+                        </div>
+                    </div>
+                </div>`] : []),
+                ...farms.map(facility => `<div class="p-3 rounded-xl border border-blue-500/40 bg-slate-950/80 text-blue-100">
+                    <span class="font-bold">${facility.name}</span><span class="text-xs text-slate-400">｜農業部件，可於農夫工作區管理</span></div>`),
+                ...mines.map(facility => `<div class="p-3 rounded-xl border border-blue-500/40 bg-slate-950/80 text-blue-100">
+                    <span class="font-bold">${facility.name}</span><span class="text-xs text-slate-400">｜採礦部件，可於礦工工作區管理</span></div>`)
+            ];
+            panel.classList.toggle('hidden', components.length === 0);
+            container.innerHTML = components.join('');
         }
 
         function getGridDimensions(lv) {
@@ -1568,26 +1882,31 @@
             document.getElementById('outing-destinations').classList.add('hidden');
             const details = document.getElementById('outing-shop-content');
             details.classList.remove('hidden');
+            const requiredProfession = shopId === 'farm-shop' ? 'farmer' : shopId === 'mining-shop' ? 'miner' : null;
             details.innerHTML = SHOP_CATALOG[shopId].map(good => {
                 const alreadyOwned = ['water-maker', 'purifier', 'mana-pool', 'compressor', 'packaging-machine'].includes(good.id) &&
                     (gameState.ownedWaterTools.some(tool => tool.id === good.id) ||
                         (good.id === 'packaging-machine' && gameState.gridItems.some(item => item.shopGoodId === good.id)));
                 const componentOwned = good.id === 'faucet' &&
-                    gameState.gridItems.some(item => item.shopGoodId === good.id);
-                const professionMissing = good.profession && !gameState.professions.includes(good.profession);
-                const unavailable = alreadyOwned || componentOwned || professionMissing ||
-                    (good.id === 'water-manual' && gameState.professions.includes('waterMerchant'));
-                const requirement = professionMissing ? '需要水商職業'
-                    : alreadyOwned || componentOwned ? '已擁有'
+                    (gameState.ownedWaterComponents.includes(good.id) ||
+                        gameState.gridItems.some(item => item.shopGoodId === good.id));
+                const manualOwned = good.professionManual && gameState.professions.includes(good.professionManual);
+                const shopProfessionMissing = requiredProfession && !gameState.professions.includes(requiredProfession);
+                const itemProfessionMissing = good.profession && !gameState.professions.includes(good.profession);
+                const unavailable = alreadyOwned || componentOwned || shopProfessionMissing || itemProfessionMissing ||
+                    manualOwned || (good.id === 'water-manual' && gameState.professions.includes('waterMerchant'));
+                const requirement = shopProfessionMissing ? `需要${requiredProfession === 'farmer' ? '農夫' : '礦工'}手則`
+                    : itemProfessionMissing ? '需要水商職業'
+                    : alreadyOwned || componentOwned || manualOwned ? '已擁有／已學會'
                     : good.id === 'water-manual' && gameState.professions.includes('waterMerchant') ? '已學會' : '';
-                const singlePurchase = alreadyOwned || componentOwned || good.id === 'water-manual';
-                return `<div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
-                    <div class="min-w-0"><div class="font-bold text-sm text-slate-100"><i class="fa-solid ${good.icon} text-amber-400 mr-2"></i>${good.name}</div>
+                const singlePurchase = alreadyOwned || componentOwned || manualOwned || good.professionManual;
+                return `<div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-blue-950/20 border border-blue-900/50">
+                    <div class="min-w-0"><div class="font-bold text-sm text-blue-100"><i class="fa-solid ${good.icon} text-blue-300 mr-2"></i>${good.name}</div>
                     <p class="text-xs text-slate-400 mt-1">${good.description}</p></div>
                     <div class="flex items-center gap-2 shrink-0">
-                    <label class="flex items-center gap-1 text-xs text-slate-400"><input class="shop-good-select accent-amber-500" type="checkbox" data-good-id="${good.id}" ${unavailable ? 'disabled' : ''}>選購</label>
+                    <label class="flex items-center gap-1 text-xs text-slate-400"><input class="shop-good-select accent-blue-400" type="checkbox" data-good-id="${good.id}" ${unavailable ? 'disabled' : ''}>選購</label>
                     <input class="shop-good-quantity w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs" data-good-id="${good.id}" type="number" min="1" max="50" value="1" ${singlePurchase ? 'disabled' : ''} aria-label="${good.name}數量">
-                    <span class="text-xs text-amber-300">${requirement || `${good.price} G/件`}</span></div>
+                    <span class="text-xs text-blue-300">${requirement || `${good.price} G/件`}</span></div>
                 </div>`;
             }).join('');
             details.innerHTML += `<button onclick="buySelectedShopGoods('${shopId}')" class="w-full mt-3 py-3 bg-amber-600 hover:bg-amber-500 text-slate-950 font-black rounded-lg">確認採購選取商品</button>`;
@@ -1605,9 +1924,18 @@
                 return;
             }
             const buyingWaterManual = selections.some(({ good }) => good.id === 'water-manual');
+            const requiredShopProfession = shopId === 'farm-shop' ? 'farmer' : shopId === 'mining-shop' ? 'miner' : null;
+            if (requiredShopProfession && !gameState.professions.includes(requiredShopProfession)) {
+                alert(`需要先購買${requiredShopProfession === 'farmer' ? '農夫' : '礦工'}手則。`);
+                return;
+            }
             if (selections.some(({ good }) => good.profession && !gameState.professions.includes(good.profession) &&
                 !(good.profession === 'waterMerchant' && buyingWaterManual))) {
                 alert('尚未取得水商職業，無法購買所選道具。');
+                return;
+            }
+            if (selections.some(({ good }) => good.professionManual && gameState.professions.includes(good.professionManual))) {
+                alert('已取得該職業，無法重複購買手則。');
                 return;
             }
             const totalCost = selections.reduce((total, selection) => total + selection.good.price * selection.quantity, 0);
@@ -1622,19 +1950,50 @@
                 return;
             }
             const planned = [];
+            const plannedFarms = [];
+            const plannedMines = [];
             for (const { good, quantity } of selections) {
-                if (                ['water-maker', 'purifier', 'mana-pool', 'compressor', 'packaging-machine', 'faucet'].includes(good.id) &&
+                if (['water-maker', 'purifier', 'mana-pool', 'compressor', 'packaging-machine', 'faucet'].includes(good.id) &&
                     (gameState.ownedWaterTools.some(tool => tool.id === good.id) ||
-                        gameState.gridItems.some(item => item.shopGoodId === good.id))) {
+                        gameState.gridItems.some(item => item.shopGoodId === good.id) ||
+                        (good.id === 'faucet' && gameState.ownedWaterComponents.includes(good.id)))) {
                     alert(`${good.name}已擁有，無法重複購買。`);
                     return;
                 }
-                if (good.id === 'water-manual' && gameState.professions.includes('waterMerchant')) {
-                    alert('已取得水商職業，無法重複購買手則。');
-                    return;
-                }
                 for (let count = 0; count < quantity; count++) {
-                    if (good.id === 'water-manual' || good.id === 'faucet') continue;
+                    if (good.professionManual || good.kind === 'farm-seed' || good.kind === 'farm-module' ||
+                        good.kind === 'mining-module' || good.id === 'water-manual' || good.id === 'faucet') continue;
+                    if (good.kind === 'farm-facility' || good.kind === 'mining-facility') {
+                        const facilityId = Date.now() + Math.floor(Math.random() * 1000000) + plannedFarms.length + plannedMines.length;
+                        if (good.kind === 'farm-facility') {
+                            plannedFarms.push({
+                                id: facilityId, type: good.facility, name: good.name, modules: [], soilScore: 8,
+                                plantedSeed: null, progressDays: 0, requiredDays: 0,
+                                waterScore: 0, sunlightScore: 0, pestLoss: 0, shopPurchased: true, shopGoodId: good.id
+                            });
+                        } else {
+                            plannedMines.push({
+                                id: facilityId, type: good.facility, name: good.name, modules: [], areaId: '',
+                                progressDays: 0, lastWorkedDay: gameState.day, shopPurchased: true, shopGoodId: good.id
+                            });
+                        }
+                        if (good.storeComponent) continue;
+                        const item = createShopGridItem({ ...good, functional: true });
+                        const position = findFirstFreeGridCell(item.w, item.h, planned);
+                        if (!position) {
+                            alert('貨架空間不足，無法放入本次所有採購設備。');
+                            return;
+                        }
+                        Object.assign(item, {
+                            id: Date.now() + Math.floor(Math.random() * 1000000) + planned.length,
+                            r: position.r, c: position.c, shopGoodId: good.id,
+                            farmFacilityId: good.kind === 'farm-facility' ? facilityId : undefined,
+                            miningFacilityId: good.kind === 'mining-facility' ? facilityId : undefined,
+                            functional: true, shopPurchased: true
+                        });
+                        planned.push({ r: position.r, c: position.c, w: item.w, h: item.h, item });
+                        continue;
+                    }
                     const item = createShopGridItem(good);
                     const position = findFirstFreeGridCell(item.w, item.h, planned);
                     if (!position) {
@@ -1649,15 +2008,44 @@
                     item.id = Date.now() + Math.floor(Math.random() * 1000000) + planned.length;
                     item.shopGoodId = good.id;
                     item.functional = Boolean(good.functional);
+                    item.shopPurchased = true;
                     ensureItemFields(item);
                     if (!item.packageContents) item.price = good.price;
                     planned[planned.length - 1] = { r: position.r, c: position.c, w: item.w, h: item.h, item };
                 }
             }
             gameState.gold -= totalCost;
-            for (const { good } of selections) {
-                if (good.id === 'water-manual') {
-                    if (!gameState.professions.includes('waterMerchant')) gameState.professions.push('waterMerchant');
+            gameState.farmFacilities.push(...plannedFarms);
+            gameState.miningFacilities.push(...plannedMines);
+            for (const { good, quantity } of selections) {
+                if (good.professionManual) {
+                    if (!gameState.professions.includes(good.professionManual)) gameState.professions.push(good.professionManual);
+                    continue;
+                }
+                if (good.kind === 'farm-seed') {
+                    for (let count = 0; count < quantity; count++) {
+                        gameState.farmSeeds.push({
+                            id: Date.now() + Math.floor(Math.random() * 1000000) + count,
+                            seedId: good.id, crop: good.crop, name: good.name,
+                            price: good.price, growDays: good.growDays, yield: good.yield,
+                            baseValue: good.baseValue, magic: Boolean(good.magic),
+                            seedScore: Math.floor(Math.random() * 16), shopPurchased: true
+                        });
+                    }
+                    continue;
+                }
+                if (good.kind === 'farm-facility') {
+                    continue;
+                }
+                if (good.kind === 'farm-module') {
+                    gameState.farmModules[good.module] = (gameState.farmModules[good.module] || 0) + quantity;
+                    continue;
+                }
+                if (good.kind === 'mining-facility') {
+                    continue;
+                }
+                if (good.kind === 'mining-module') {
+                    gameState.miningModules[good.module] = (gameState.miningModules[good.module] || 0) + quantity;
                     continue;
                 }
                 if (good.id === 'faucet' && !gameState.ownedWaterComponents.includes('faucet')) {
@@ -1708,6 +2096,381 @@
             }
             if (good.functional) item.tags.push('functional');
             return item;
+        }
+
+        function renderIndustryWorkshops() {
+            const farm = document.getElementById('farm-workshop');
+            const mining = document.getElementById('mining-workshop');
+            if (!farm || !mining) return;
+            farm.innerHTML = gameState.professions.includes('farmer')
+                ? renderFarmWorkshop()
+                : '<p class="text-sm text-slate-400">尚未取得農夫職業。請到百業手則商店購買農夫手則（3,200 G）。</p>';
+            mining.innerHTML = gameState.professions.includes('miner')
+                ? renderMiningWorkshop()
+                : '<p class="text-sm text-slate-400">尚未取得礦工職業。請到百業手則商店購買礦工手則（5,800 G）。</p>';
+        }
+
+        function renderFarmWorkshop() {
+            const seedOptions = gameState.farmSeeds.map(seed =>
+                `<option value="${seed.id}">${seed.name}｜品質分數 ${seed.seedScore}</option>`).join('');
+            const waterItems = gameState.gridItems.filter(item => item.water);
+            const waterOptions = ['<option value="">自然供水</option>', ...waterItems.map(item =>
+                `<option value="${item.id}">${item.name}</option>`)].join('');
+            const facilities = gameState.farmFacilities.map(facility => {
+                const planted = facility.plantedSeed;
+                const rules = FARM_FACILITY_RULES[facility.type];
+                const moduleOptions = Object.entries(gameState.farmModules)
+                    .filter(([id, count]) => count > 0 && !facility.modules.includes(id))
+                    .map(([id]) => `<option value="${id}">${FARM_MODULE_LABELS[id]}</option>`).join('');
+                const status = planted
+                    ? `生長中：${planted.name}（剩餘 ${Math.max(0, facility.requiredDays - facility.progressDays)} 天）`
+                    : '閒置，選擇種子開始一輪生長';
+                return `<article class="rounded-xl border border-blue-500/40 bg-blue-950/20 p-4 text-blue-100">
+                    <div class="flex flex-wrap justify-between gap-2">
+                        <div><h3 class="font-bold text-blue-200">${facility.name}</h3>
+                        <p class="text-xs text-slate-400">${rules.size}｜${status}</p>
+                        <p class="text-[11px] text-blue-300 mt-1">配件：${facility.modules.map(id => FARM_MODULE_LABELS[id]).join('、') || '無'}</p></div>
+                        ${planted ? '' : `<div class="flex flex-wrap gap-2 items-center">
+                            <select id="farm-seed-${facility.id}" class="bg-slate-900 border border-blue-800 rounded px-2 py-1 text-xs">${seedOptions || '<option value="">沒有種子</option>'}</select>
+                            <select id="farm-water-${facility.id}" class="bg-slate-900 border border-blue-800 rounded px-2 py-1 text-xs">${waterOptions}</select>
+                            <button onclick="plantFarmSeed(${facility.id})" class="rounded bg-blue-700 hover:bg-blue-600 px-3 py-1.5 text-xs font-bold" ${gameState.farmSeeds.length ? '' : 'disabled'}>放入種子</button>
+                        </div>`}
+                    </div>
+                    ${moduleOptions ? `<div class="flex gap-2 mt-3"><select id="farm-module-${facility.id}" class="bg-slate-900 border border-blue-800 rounded px-2 py-1 text-xs">${moduleOptions}</select>
+                        <button onclick="installFarmModule(${facility.id})" class="rounded border border-blue-500 px-3 py-1 text-xs text-blue-200">安裝配件</button></div>` : ''}
+                </article>`;
+            }).join('');
+            const seedList = gameState.farmSeeds.length
+                ? `<div class="text-xs text-blue-200">種子庫存：${gameState.farmSeeds.map(seed => seed.name).join('、')}</div>`
+                : '<div class="text-xs text-slate-500">沒有種子。種子必須先到農業器具商店購買。</div>';
+            const moduleStock = Object.entries(gameState.farmModules).filter(([, count]) => count > 0)
+                .map(([id, count]) => `${FARM_MODULE_LABELS[id]} ×${count}`).join('、');
+            const produce = gameState.farmProduce.map(product =>
+                `<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-slate-950/70 px-3 py-2 text-xs">
+                    <span class="text-blue-200">${product.name}｜${QUALITY_LABELS[product.quality]}｜${product.quantity} 個｜${product.price} G/個</span>
+                    <button onclick="shelfIndustryProduce('farm',${product.id})" class="rounded bg-blue-700 px-2.5 py-1 text-blue-50">上架一個</button>
+                </div>`).join('');
+            return `${seedList}<div class="text-xs text-blue-300">配件庫存：${moduleStock || '無'}</div>${facilities || '<p class="text-xs text-slate-500">尚未購買農業設備。</p>'}
+                <h3 class="pt-2 text-sm font-bold text-blue-200">收成庫存</h3>${produce || '<p class="text-xs text-slate-500">尚無農作物。</p>'}`;
+        }
+
+        function renderMiningWorkshop() {
+            const facilities = gameState.miningFacilities.map(facility => {
+                const rules = MINING_FACILITY_RULES[facility.type];
+                const areaOptions = MINING_AREAS.map(area =>
+                    `<option value="${area.id}" ${facility.areaId === area.id ? 'selected' : ''}>${area.name}</option>`).join('');
+                const modules = Object.entries(gameState.miningModules)
+                    .filter(([id, count]) => count > 0 && (id === 'reinforced-drill' || !facility.modules.includes(id)))
+                    .map(([id]) => `<option value="${id}">${MINING_MODULE_LABELS[id]}</option>`).join('');
+                const area = MINING_AREAS.find(entry => entry.id === facility.areaId);
+                const remaining = Math.max(0, getMiningInterval(facility) - facility.progressDays);
+                return `<article class="rounded-xl border border-blue-500/40 bg-blue-950/20 p-4 text-blue-100">
+                    <div class="flex flex-wrap justify-between gap-2">
+                        <div><h3 class="font-bold text-blue-200">${facility.name}</h3>
+                        <p class="text-xs text-slate-400">${facility.areaId ? `開採中：${area?.name || '未知礦區'}｜下次開採 ${remaining} 天` : '尚未選擇礦區'}</p>
+                        <p class="text-[11px] text-blue-300 mt-1">${facility.modules.map(id => MINING_MODULE_LABELS[id]).join('、') || '無配件'}</p></div>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <select id="mine-area-${facility.id}" class="bg-slate-900 border border-blue-800 rounded px-2 py-1 text-xs">${areaOptions}</select>
+                            <button onclick="startMining(${facility.id})" class="rounded bg-blue-700 hover:bg-blue-600 px-3 py-1.5 text-xs font-bold">選擇礦區</button>
+                        </div>
+                    </div>
+                    ${area ? `<div class="mt-2 text-[11px] text-cyan-200"><p class="mb-1">近期消息：</p><ul class="list-disc space-y-1 pl-4">${getMiningAreaNews(area).map(news => `<li>${news}</li>`).join('')}</ul></div>` : ''}
+                    ${modules ? `<div class="flex gap-2 mt-3"><select id="mining-module-${facility.id}" class="bg-slate-900 border border-blue-800 rounded px-2 py-1 text-xs">${modules}</select>
+                        <button onclick="installMiningModule(${facility.id})" class="rounded border border-blue-500 px-3 py-1 text-xs text-blue-200">安裝配件</button></div>` : ''}
+                </article>`;
+            }).join('');
+            const moduleStock = Object.entries(gameState.miningModules).filter(([, count]) => count > 0)
+                .map(([id, count]) => `${MINING_MODULE_LABELS[id]} ×${count}`).join('、');
+            const produce = gameState.miningProduce.map(product =>
+                `<div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-slate-950/70 px-3 py-2 text-xs">
+                    <span class="text-blue-200">${product.name}｜${QUALITY_LABELS[product.quality]}｜${product.quantity} 個｜${product.price} G/個</span>
+                    <button onclick="shelfIndustryProduce('mining',${product.id})" class="rounded bg-blue-700 px-2.5 py-1 text-blue-50">上架一個</button>
+                </div>`).join('');
+            return `<div class="text-xs text-blue-300">配件庫存：${moduleStock || '無'}</div>${facilities || '<p class="text-xs text-slate-500">尚未購買採礦設備。</p>'}
+                <h3 class="pt-2 text-sm font-bold text-blue-200">礦物庫存</h3>${produce || '<p class="text-xs text-slate-500">尚無礦物。</p>'}`;
+        }
+
+        function plantFarmSeed(facilityId) {
+            const facility = gameState.farmFacilities.find(entry => entry.id === facilityId);
+            const seedSelect = document.getElementById(`farm-seed-${facilityId}`);
+            if (!facility || facility.plantedSeed || !seedSelect?.value) {
+                alert('請選擇一顆庫存種子，並確認設備閒置。');
+                return;
+            }
+            const seedIndex = gameState.farmSeeds.findIndex(seed => String(seed.id) === seedSelect.value);
+            if (seedIndex < 0) {
+                alert('所選種子已不存在，請重新整理選擇。');
+                return;
+            }
+            const seed = gameState.farmSeeds[seedIndex];
+            const hasAllFarmModules = Object.keys(FARM_MODULE_LABELS).every(module => facility.modules.includes(module));
+            const allowedFacilities = seed.crop === 'worldTree'
+                ? (facility.type === 'world-tree' || (facility.type === 'advanced-farm' && hasAllFarmModules)
+                    ? ['world-tree', 'advanced-farm'] : ['world-tree'])
+                : seed.magic ? ['advanced-farm', 'magic-pot', 'world-tree']
+                    : Object.keys(FARM_FACILITY_RULES);
+            if (!allowedFacilities.includes(facility.type)) {
+                alert(`${seed.name}不能種植於此設備。`);
+                return;
+            }
+            let waterScore = 8 + Math.floor(Math.random() * 13);
+            const waterSelect = document.getElementById(`farm-water-${facilityId}`);
+            if (waterSelect?.value) {
+                const waterIndex = gameState.gridItems.findIndex(item =>
+                    String(item.id) === waterSelect.value && item.water);
+                if (waterIndex < 0) {
+                    alert('所選水杯已不存在。');
+                    return;
+                }
+                const water = gameState.gridItems.splice(waterIndex, 1)[0];
+                const waterQuality = Math.max(0, qualityIndex(water.quality));
+                waterScore = Math.round(waterQuality / (QUALITY_KEYS.length - 1) * 30);
+            }
+            const modules = facility.modules;
+            let requiredDays = seed.growDays;
+            if (facility.type === 'world-tree' && seed.crop !== 'worldTree') requiredDays *= 0.5;
+            if (modules.includes('auto-greenhouse')) requiredDays *= 0.8;
+            if (modules.includes('sun-lamp')) requiredDays *= 0.9;
+            const preparedSeed = { ...seed };
+            delete preparedSeed.id;
+            gameState.farmSeeds.splice(seedIndex, 1);
+            facility.plantedSeed = preparedSeed;
+            facility.progressDays = 0;
+            facility.requiredDays = Math.max(1, Math.ceil(requiredDays));
+            facility.waterScore = Math.min(30, waterScore + (modules.includes('sprinkler') ? 5 : 0));
+            facility.sunlightScore = modules.includes('sun-lamp') ? 20 : 8 + Math.floor(Math.random() * 13);
+            facility.pestLoss = modules.includes('bug-lamp') ? Math.floor(Math.random() * 10) : Math.floor(Math.random() * 31);
+            logMsg(`${facility.name}已播種《${seed.name}》，消耗種子並開始生長（${facility.requiredDays} 天）`);
+            refreshUI();
+            autoSaveAll();
+        }
+
+        function installFarmModule(facilityId) {
+            const facility = gameState.farmFacilities.find(entry => entry.id === facilityId);
+            const select = document.getElementById(`farm-module-${facilityId}`);
+            const moduleId = select?.value;
+            if (!facility || !moduleId || !gameState.farmModules[moduleId]) return;
+            if (!['ordinary-farm', 'advanced-farm'].includes(facility.type)) {
+                alert('農業配件只能安裝在普通農田或高級農田。');
+                return;
+            }
+            if (facility.modules.includes(moduleId)) {
+                alert('此設備已安裝該配件。');
+                return;
+            }
+            facility.modules.push(moduleId);
+            gameState.farmModules[moduleId]--;
+            refreshUI();
+            autoSaveAll();
+        }
+
+        function getMiningInterval(facility) {
+            return MINING_FACILITY_RULES[facility.type].interval;
+        }
+
+        function startMining(facilityId) {
+            const facility = gameState.miningFacilities.find(entry => entry.id === facilityId);
+            const areaId = document.getElementById(`mine-area-${facilityId}`)?.value;
+            if (!facility || !MINING_AREAS.some(area => area.id === areaId)) return;
+            facility.areaId = areaId;
+            facility.progressDays = 0;
+            facility.lastWorkedDay = gameState.day;
+            logMsg(`${facility.name}已選擇${MINING_AREAS.find(area => area.id === areaId).name}，開始開採。`);
+            refreshUI();
+            autoSaveAll();
+        }
+
+        function installMiningModule(facilityId) {
+            const facility = gameState.miningFacilities.find(entry => entry.id === facilityId);
+            const select = document.getElementById(`mining-module-${facilityId}`);
+            const moduleId = select?.value;
+            if (!facility || !moduleId || !gameState.miningModules[moduleId]) return;
+            if (facility.modules.includes(moduleId) && moduleId !== 'reinforced-drill') {
+                alert('此設備已安裝該配件。');
+                return;
+            }
+            if (moduleId === 'ore-detector' && MINING_FACILITY_RULES[facility.type].table.length < 3) {
+                alert('礦脈探測器需要能開採至少三種礦物的設備。');
+                return;
+            }
+            if (moduleId === 'deep-drill-system' && !['mana-miner', 'auto-drill'].includes(facility.type)) {
+                alert('深層鑽探系統只能安裝在魔力採礦機或自動鑽探機。');
+                return;
+            }
+            if (moduleId === 'mana-detector' && !MINING_FACILITY_RULES[facility.type].table.some(([oreId]) => oreId === 'gold')) {
+                alert('魔力探測器只能安裝在含金礦產出的採礦設備。');
+                return;
+            }
+            facility.modules.push(moduleId);
+            gameState.miningModules[moduleId]--;
+            refreshUI();
+            autoSaveAll();
+        }
+
+        function stepFarmGrowth() {
+            for (const facility of gameState.farmFacilities) {
+                if (!facility.plantedSeed) continue;
+                facility.progressDays++;
+                if (facility.progressDays >= facility.requiredDays) harvestFarmFacility(facility);
+            }
+        }
+
+        function harvestFarmFacility(facility) {
+            const seed = facility.plantedSeed;
+            const rules = FARM_FACILITY_RULES[facility.type];
+            const modules = facility.modules;
+            const magicScore = seed.magic ? Math.floor(Math.random() * 11) + (facility.type === 'magic-pot' ? 5 : 0) : 0;
+            let score = facility.waterScore + facility.sunlightScore + (30 - facility.pestLoss) +
+                seed.seedScore + magicScore + facility.soilScore +
+                (modules.includes('fertilizer') ? 10 : 0) + (modules.includes('magic-soil') ? 10 : 0);
+            score = Math.max(0, Math.min(100, score));
+            let quality = score < 20 ? 'junk' : score < 35 ? 'poor' : score < 45 ? 'low' : score < 50 ? 'sub'
+                : score < 60 ? 'mid' : score < 70 ? 'fine' : score < 80 ? 'good' : score < 90 ? 'great' : 'top';
+            const minQuality = Math.max(rules.minQuality || 0, modules.includes('magic-greenhouse') ? qualityIndex('fine') : 0);
+            if (facility.type === 'world-tree') quality = 'top';
+            else quality = QUALITY_KEYS[Math.max(qualityIndex(quality), minQuality)];
+            let quantity = Math.floor(seed.yield * rules.yieldMultiplier *
+                (modules.includes('irrigation') ? 1.2 : 1));
+            quantity = Math.max(1, quantity);
+            if (modules.includes('harvest-rune') && Math.random() < 0.1) quantity++;
+            const price = Math.max(1, Math.round(seed.baseValue * (1 + QUALITY_MULT[quality])));
+            const product = gameState.farmProduce.find(item => item.crop === seed.crop && item.quality === quality && item.price === price);
+            if (product) product.quantity += quantity;
+            else gameState.farmProduce.push({
+                id: Date.now() + Math.floor(Math.random() * 1000000), crop: seed.crop, name: seed.name.replace('種子', ''),
+                quantity, quality, baseValue: seed.baseValue, price, shopPurchased: false
+            });
+            logMsg(`${facility.name}收成《${seed.name.replace('種子', '')}》${quantity} 個，品質${QUALITY_LABELS[quality]}（${score}分）`);
+            facility.plantedSeed = null;
+            facility.progressDays = 0;
+            facility.requiredDays = 0;
+            if (modules.includes('auto-seeder')) {
+                const nextSeedIndex = gameState.farmSeeds.findIndex(item => item.crop === seed.crop &&
+                    (seed.crop !== 'worldTree' || facility.type === 'world-tree'));
+                if (nextSeedIndex >= 0) {
+                    const nextSeed = gameState.farmSeeds.splice(nextSeedIndex, 1)[0];
+                    facility.plantedSeed = { ...nextSeed };
+                    delete facility.plantedSeed.id;
+                    let days = nextSeed.growDays * (facility.type === 'world-tree' && nextSeed.crop !== 'worldTree' ? 0.5 : 1);
+                    if (modules.includes('auto-greenhouse')) days *= 0.8;
+                    if (modules.includes('sun-lamp')) days *= 0.9;
+                    facility.requiredDays = Math.max(1, Math.ceil(days));
+                    facility.waterScore = modules.includes('sprinkler') ? 18 : 13;
+                    facility.sunlightScore = modules.includes('sun-lamp') ? 20 : 14;
+                    facility.pestLoss = modules.includes('bug-lamp') ? 3 : 12;
+                    logMsg(`${facility.name}自動消耗庫存種子《${nextSeed.name}》重新播種。`);
+                }
+            }
+        }
+
+        function getMiningDropTable(facility) {
+            const table = MINING_FACILITY_RULES[facility.type].table.map(([id, chance]) => ({ id, chance }));
+            const has = id => table.find(entry => entry.id === id);
+            const rareDetector = facility.modules.includes('ore-detector');
+            if (rareDetector && table.length > 2) {
+                const common = [...table].sort((a, b) => b.chance - a.chance);
+                const rare = [...table].sort((a, b) => a.chance - b.chance);
+                const bonusA = Math.min(0.05, common[0].chance);
+                const bonusB = Math.min(0.03, common[1].chance);
+                common[0].chance -= bonusA;
+                common[1].chance -= bonusB;
+                rare[0].chance += bonusA;
+                rare[1].chance += bonusB;
+            }
+            const convert = (sourceId, targetId, rate) => {
+                const source = has(sourceId);
+                if (!source || rate <= 0) return;
+                const amount = source.chance * rate;
+                source.chance -= amount;
+                const target = has(targetId);
+                if (target) target.chance += amount;
+                else table.push({ id: targetId, chance: amount });
+            };
+            if (facility.modules.includes('mana-detector')) {
+                convert('gold', 'mana-ore', 0.1);
+                convert('gold', 'crystal', 0.05);
+                convert('gold', 'void-ore', 0.025);
+            }
+            if (facility.modules.includes('deep-drill-system')) {
+                convert('crystal', 'void-ore', 0.5);
+                convert('crystal', 'life-crystal', 0.1);
+            }
+            const total = table.reduce((sum, entry) => sum + entry.chance, 0) || 1;
+            return table.map(entry => ({ ...entry, chance: entry.chance / total }));
+        }
+
+        function rollMiningOre(facility) {
+            const table = getMiningDropTable(facility);
+            let roll = Math.random();
+            for (const entry of table) {
+                roll -= entry.chance;
+                if (roll <= 0) return MINING_ORES.find(ore => ore.id === entry.id);
+            }
+            return MINING_ORES.find(ore => ore.id === table[table.length - 1].id);
+        }
+
+        function stepMiningFacilities() {
+            for (const facility of gameState.miningFacilities) {
+                if (!facility.areaId || facility.lastWorkedDay >= gameState.day) continue;
+                facility.lastWorkedDay = gameState.day;
+                facility.progressDays += 1 + facility.modules.filter(id => id === 'reinforced-drill').length * 0.05;
+                while (facility.progressDays >= getMiningInterval(facility)) {
+                    harvestMiningFacility(facility);
+                    facility.progressDays -= getMiningInterval(facility);
+                }
+            }
+        }
+
+        function harvestMiningFacility(facility) {
+            const rules = MINING_FACILITY_RULES[facility.type];
+            const area = MINING_AREAS.find(entry => entry.id === facility.areaId);
+            const amount = rules.amount + (facility.modules.includes('conveyor') ? 1 : 0);
+            for (let index = 0; index < amount; index++) {
+                const ore = rollMiningOre(facility);
+                if (!ore) continue;
+                const purity = area.purity[0] + Math.floor(Math.random() * (area.purity[1] - area.purity[0] + 1));
+                const lighting = facility.modules.includes('lighting-equipment');
+                const ruined = !facility.modules.includes('vein-rune') && Math.random() < (lighting ? 0.05 : 0.2);
+                const completeness = ruined ? 0 : 25 + Math.floor(Math.random() * 26);
+                const score = Math.min(100, purity + completeness + (facility.modules.includes('ore-sifter') ? 10 : 0));
+                const quality = ruined ? 'junk' : score < 20 ? 'junk' : score < 35 ? 'poor' : score < 45 ? 'low' :
+                    score < 50 ? 'sub' : score < 60 ? 'mid' : score < 70 ? 'fine' : score < 80 ? 'good' : score < 90 ? 'great' : 'top';
+                const price = Math.max(1, Math.round(ore.baseValue * (1 + QUALITY_MULT[quality])));
+                const product = gameState.miningProduce.find(item => item.oreId === ore.id &&
+                    item.quality === quality && item.price === price);
+                if (product) product.quantity++;
+                else gameState.miningProduce.push({
+                    id: Date.now() + Math.floor(Math.random() * 1000000), oreId: ore.id, name: ore.name,
+                    quantity: 1, quality, baseValue: ore.baseValue, price, shopPurchased: false
+                });
+            }
+            logMsg(`${facility.name}完成一輪開採，共取得 ${amount} 個礦物。`);
+        }
+
+        function shelfIndustryProduce(kind, productId) {
+            const inventory = kind === 'farm' ? gameState.farmProduce : gameState.miningProduce;
+            const product = inventory.find(item => item.id === productId);
+            if (!product || product.quantity <= 0) return;
+            const position = findFirstFreeGridCell(1, 1);
+            if (!position) {
+                alert('貨架沒有空位，請先整理貨架。');
+                return;
+            }
+            const ore = kind === 'mining' ? MINING_ORES.find(item => item.id === product.oreId) : null;
+            gameState.gridItems.push({
+                id: Date.now() + Math.floor(Math.random() * 1000000),
+                name: product.name, category: kind === 'farm' ? 'folk' : 'guild',
+                rarity: '普通', baseValue: product.baseValue, price: product.price,
+                icon: ore?.icon || FARM_SEEDS[product.crop]?.icon || 'fa-seedling',
+                w: 1, h: 1, r: position.r, c: position.c,
+                quality: product.quality, labelQuality: product.quality,
+                tags: kind === 'farm' ? ['food', 'farm', 'folk'] : ['mining', 'ore', 'guild'],
+                shopPurchased: false
+            });
+            product.quantity--;
+            if (product.quantity === 0) inventory.splice(inventory.indexOf(product), 1);
+            refreshUI();
+            autoSaveAll();
         }
 
         function finishOuting() {
@@ -1824,8 +2587,9 @@
             if (gridIndex < 0) return;
             const item = gameState.gridItems[gridIndex];
             const tool = gameState.ownedWaterTools.find(device => device.id === toolId);
-            if (!gameState.gridItems.some(candidate => candidate.shopGoodId === toolId)) {
-                alert('請先將設備放回貨架上才能使用。');
+            const componentInstalled = toolId === 'faucet' && gameState.ownedWaterComponents.includes('faucet');
+            if (!componentInstalled && !gameState.gridItems.some(candidate => candidate.shopGoodId === toolId)) {
+                alert('請先將設備放回貨架，或將店面部件安裝在商店。');
                 return;
             }
 
@@ -2031,16 +2795,16 @@
                 ensureItemFields(item);
                 const isSelected = selectedCounterItemId === item.id;
                 const isOffer = selectedOfferItemIds.includes(item.id);
-                const matchBuy = currentCustomer && currentCustomer.intent === 'buy' && itemMatchesRequest(item, currentCustomer.request);
+                const matchBuy = currentCustomer && currentCustomer.intent === 'buy' && itemMatchesCustomerRequest(item, currentCustomer);
                 const card = document.createElement('div');
                 card.draggable = true;
                 card.dataset.itemId = item.id;
-                card.className = `p-2.5 rounded-xl border flex justify-between items-center transition cursor-grab active:cursor-grabbing ${isSelected ? 'bg-amber-950/80 border-amber-400' : isOffer ? 'bg-cyan-950/80 border-cyan-400 ring-2 ring-cyan-500/60' : matchBuy ? 'bg-emerald-950/40 border-emerald-700' : 'bg-slate-950 border-slate-800'}`;
+                card.className = `p-2.5 rounded-xl border flex justify-between items-center transition cursor-grab active:cursor-grabbing ${isSelected ? 'bg-amber-950/80 border-amber-400' : isOffer ? 'bg-cyan-950/80 border-cyan-400 ring-2 ring-cyan-500/60' : matchBuy ? 'bg-emerald-950/40 border-emerald-700' : item.shopPurchased ? 'bg-blue-950/40 border-blue-700/70' : 'bg-slate-950 border-slate-800'}`;
                 card.addEventListener('dragstart', (e) => startDrag(e, 'counter', item.id));
                 card.addEventListener('dragend', endDrag);
                 card.addEventListener('click', (e) => {
                     if (currentCustomer && currentCustomer.intent === 'buy') {
-                        if (itemMatchesRequest(item, currentCustomer.request)) {
+                        if (itemMatchesCustomerRequest(item, currentCustomer)) {
                             toggleOfferItem(item);
                             if (inspectOfferedItem(currentCustomer, item)) updateSelectedOfferPrice();
                             refreshUI();
@@ -2057,7 +2821,7 @@
                             <i class="fa-solid ${item.icon}"></i>
                         </div>
                         <div class="min-w-0">
-                            <div class="text-xs font-bold text-slate-200 truncate">${item.name}</div>
+                            <div class="text-xs font-bold ${item.shopPurchased ? 'text-blue-200' : 'text-slate-200'} truncate">${item.name}</div>
                             <div class="text-[10px] text-slate-400"><span class="${qualityClass(item.labelQuality)}">${getItemQualityLabel(item)}</span> | ${item.w}×${item.h} | ${item.price}G</div>
                         </div>
                     </div>
@@ -2072,16 +2836,7 @@
         function toggleOfferItem(item) {
             const index = selectedOfferItemIds.indexOf(item.id);
             if (index >= 0) selectedOfferItemIds.splice(index, 1);
-            else {
-                const selectedItems = gameState.counterItems.filter(offer => selectedOfferItemIds.includes(offer.id));
-                const selectedTotal = selectedItems
-                    .reduce((total, offer) => total + offer.price, 0);
-                if (selectedTotal + item.price > currentCustomer.targetPrice) {
-                    alert(`顧客預算為 ${currentCustomer.targetPrice}G，已選商品總價不能再增加。`);
-                    return false;
-                }
-                selectedOfferItemIds.push(item.id);
-            }
+            else selectedOfferItemIds.push(item.id);
             updateSelectedOfferPrice();
             return true;
         }
@@ -2125,6 +2880,11 @@
                 const idx = gameState.gridItems.findIndex(i => i.id === dragPayload.itemId);
                 if (idx !== -1) {
                     const moving = gameState.gridItems[idx];
+                    if (moving.farmFacilityId || moving.miningFacilityId) {
+                        alert('農業或採礦設備不可移入櫃台，請在產業工作區管理。');
+                        dragPayload = null;
+                        return;
+                    }
                     const device = gameState.ownedWaterTools.find(tool => tool.id === moving.shopGoodId);
                     if ((device && device.storage.length > 0) ||
                         (moving.shopGoodId === 'packaging-machine' &&
@@ -2138,7 +2898,7 @@
                     delete item.c;
                     gameState.counterItems.push(item);
                     if (currentCustomer && currentCustomer.intent === 'buy' &&
-                        itemMatchesRequest(item, currentCustomer.request)) {
+                        itemMatchesCustomerRequest(item, currentCustomer)) {
                         if (toggleOfferItem(item) && inspectOfferedItem(currentCustomer, item)) updateSelectedOfferPrice();
                     }
                     logMsg(`移回櫃台：《${item.name}》`);
@@ -2206,14 +2966,15 @@
                 itemElem.dataset.itemId = item.id;
                 itemElem.style.gridColumn = `${item.c + 1} / span ${item.w}`;
                 itemElem.style.gridRow = `${item.r + 1} / span ${item.h}`;
-                itemElem.className = `z-10 rounded-lg border ${item.functional ? 'border-blue-400/90 bg-gradient-to-br from-slate-900 to-blue-950/90' : 'border-amber-500/70 bg-gradient-to-br from-slate-900 to-amber-950/90'} p-1.5 flex flex-col items-center justify-between shadow-lg cursor-grab active:cursor-grabbing hover:scale-[1.02] transition transform`;
+                const blueItem = item.functional || item.shopPurchased;
+                itemElem.className = `z-10 rounded-lg border ${blueItem ? 'border-blue-400/90 bg-gradient-to-br from-slate-900 to-blue-950/90' : 'border-amber-500/70 bg-gradient-to-br from-slate-900 to-amber-950/90'} p-1.5 flex flex-col items-center justify-between shadow-lg cursor-grab active:cursor-grabbing hover:scale-[1.02] transition transform`;
                 
                 const deviceStatus = getShelfDeviceStatus(item);
                 itemElem.innerHTML = `
-                    <div class="text-[10px] ${item.functional ? 'text-blue-200' : 'text-amber-300'} font-bold truncate w-full text-center leading-tight">${item.name}</div>
-                    <div class="${item.functional ? 'text-blue-300' : 'text-amber-400'} text-sm my-0.5"><i class="fa-solid ${item.icon}"></i></div>
+                    <div class="text-[10px] ${blueItem ? 'text-blue-200' : 'text-amber-300'} font-bold truncate w-full text-center leading-tight">${item.name}</div>
+                    <div class="${blueItem ? 'text-blue-300' : 'text-amber-400'} text-sm my-0.5"><i class="fa-solid ${item.icon}"></i></div>
                     <div class="text-[9px] ${qualityClass(item.labelQuality)} font-bold">${item.emptyCup ? '空杯' : getItemQualityLabel(item)}</div>
-                    <div class="text-[10px] gold-text font-black">${item.price}G</div>
+                    <div class="text-[10px] ${blueItem ? 'text-blue-300' : 'gold-text'} font-black">${item.price}G</div>
                     ${deviceStatus ? `<div class="w-full text-center text-[8px] text-blue-200 leading-tight">${deviceStatus}</div>` : ''}
                 `;
 
@@ -2238,6 +2999,14 @@
         }
 
         function getShelfDeviceStatus(item) {
+            if (item.farmFacilityId) {
+                const facility = gameState.farmFacilities.find(entry => entry.id === item.farmFacilityId);
+                return facility?.plantedSeed ? `生長中 ${facility.progressDays}/${facility.requiredDays} 天` : '農業設備';
+            }
+            if (item.miningFacilityId) {
+                const facility = gameState.miningFacilities.find(entry => entry.id === item.miningFacilityId);
+                return facility?.areaId ? `開採中 ${facility.progressDays}/${getMiningInterval(facility)} 天` : '待選礦區';
+            }
             if (item.shopGoodId === 'water-maker') return `今日 ${gameState.waterProduction.makerUses}/3 杯`;
             if (item.shopGoodId === 'faucet') return `劣品 ${gameState.waterProduction.faucetPoorUses}/5 杯`;
             if (item.shopGoodId === 'purifier' || item.shopGoodId === 'mana-pool' || item.shopGoodId === 'compressor') {
@@ -2415,6 +3184,11 @@
 
         function renderFunctionalItemActions(item) {
             const container = document.getElementById('modal-functional-actions');
+            if (item.farmFacilityId || item.miningFacilityId) {
+                container.innerHTML = `<p class="text-xs text-blue-200">此設備在「農業與採礦」分頁中操作與管理。</p>`;
+                container.classList.remove('hidden');
+                return;
+            }
             const tool = gameState.ownedWaterTools.find(device => device.id === item.shopGoodId) ||
                 (item.shopGoodId === 'faucet' ? { id: 'faucet', name: '水龍頭', storage: [], slots: 0 } : null);
             const machine = gameState.packagingMachine;
@@ -2493,6 +3267,10 @@
             const idx = gameState.gridItems.findIndex(i => i.id === activeGridItemOpId);
             if (idx !== -1) {
                 const moving = gameState.gridItems[idx];
+                if (moving.farmFacilityId || moving.miningFacilityId) {
+                    alert('農業或採礦設備不可移入櫃台，請在產業工作區管理。');
+                    return;
+                }
                 const device = gameState.ownedWaterTools.find(tool => tool.id === moving.shopGoodId);
                 if ((device && device.storage.length > 0) ||
                     (moving.shopGoodId === 'packaging-machine' &&
@@ -2505,7 +3283,7 @@
                 delete item.c;
                 gameState.counterItems.push(item);
                 if (currentCustomer && currentCustomer.intent === 'buy' &&
-                        itemMatchesRequest(item, currentCustomer.request)) {
+                        itemMatchesCustomerRequest(item, currentCustomer)) {
                         if (toggleOfferItem(item) && inspectOfferedItem(currentCustomer, item)) updateSelectedOfferPrice();
                 }
                 logMsg(`移回櫃台：《${item.name}》`);
@@ -2520,6 +3298,12 @@
                 const idx = gameState.gridItems.findIndex(i => i.id === activeGridItemOpId);
                 if (idx !== -1) {
                     const discarding = gameState.gridItems[idx];
+                    if (discarding.farmFacilityId) {
+                        gameState.farmFacilities = gameState.farmFacilities.filter(facility => facility.id !== discarding.farmFacilityId);
+                    }
+                    if (discarding.miningFacilityId) {
+                        gameState.miningFacilities = gameState.miningFacilities.filter(facility => facility.id !== discarding.miningFacilityId);
+                    }
                     const device = gameState.ownedWaterTools.find(tool => tool.id === discarding.shopGoodId);
                     if ((device && device.storage.length > 0) ||
                         (discarding.shopGoodId === 'packaging-machine' &&
@@ -2548,9 +3332,10 @@
             return candidates[Math.floor(Math.random() * candidates.length)];
         }
 
-        function getRequestMarketItems(request) {
+        function getRequestMarketItems(requests) {
+            const requested = (Array.isArray(requests) ? requests : [requests]).filter(Boolean);
             const items = ITEM_DATABASE
-                .filter(item => itemMatchesRequest(item, request))
+                .filter(item => requested.some(request => itemMatchesRequest(item, request)))
                 .map(item => ensureItemFields({ ...item, quality: 'good', labelQuality: 'good' }));
             for (const goods of Object.values(SHOP_CATALOG)) {
                 for (const good of goods.filter(entry => entry.functional)) {
@@ -2558,17 +3343,17 @@
                     item.quality = 'good';
                     item.labelQuality = 'good';
                     item.price = Math.round(good.price * (1 + QUALITY_MULT.good));
-                    if (itemMatchesRequest(item, request)) items.push(item);
+                    if (requested.some(request => itemMatchesRequest(item, request))) items.push(item);
                 }
             }
-            if (request.kind === 'tag' && request.tag === 'water') {
+            if (requested.some(request => request.kind === 'tag' && request.tag === 'water')) {
                 items.push(createWaterItem('market', 0, 20));
             }
             return items;
         }
 
-        function getRequestMedianPrice(request) {
-            const prices = getRequestMarketItems(request).map(item => item.price).sort((a, b) => a - b);
+        function getRequestMedianPrice(requests) {
+            const prices = getRequestMarketItems(requests).map(item => item.price).sort((a, b) => a - b);
             if (prices.length === 0) return 20;
             const middle = Math.floor(prices.length / 2);
             return prices.length % 2 ? prices[middle] : (prices[middle - 1] + prices[middle]) / 2;
@@ -2576,8 +3361,28 @@
 
         function getCampIntelMultiplier(faction, request) {
             const intel = gameState.campIntel[faction];
+            const intelRequests = intel
+                ? (Array.isArray(intel.requests) ? intel.requests : [intel.request]).filter(Boolean)
+                : [];
+            const customerRequests = Array.isArray(request) ? request : [request];
             return intel && intel.untilDay >= gameState.day &&
-                intel.request && getRequestKey(intel.request) === getRequestKey(request) ? 1.2 : 1;
+                intelRequests.some(intelRequest => customerRequests.some(customerRequest =>
+                    getRequestKey(intelRequest) === getRequestKey(customerRequest))) ? 1.2 : 1;
+        }
+
+        function getCustomerBuyChance() {
+            const stockCount = gameState.gridItems.length;
+            return Math.min(0.6, 0.4 + Math.min(stockCount, 10) / 10 * 0.2);
+        }
+
+        function chooseCustomerRequests() {
+            const count = Math.random() < 0.8 ? 2 + Math.floor(Math.random() * 3) : 1;
+            const shuffled = [...CUSTOMER_REQUESTS];
+            for (let index = shuffled.length - 1; index > 0; index--) {
+                const swapIndex = Math.floor(Math.random() * (index + 1));
+                [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+            }
+            return shuffled.slice(0, count);
         }
 
         function nextCustomer() {
@@ -2619,11 +3424,12 @@
             [...gameState.gridItems, ...gameState.counterItems].forEach(item => {
                 item.forgeryInspected = false;
             });
-            let intent = isRentDay ? 'rent' : shopOwner ? 'sell' : (Math.random() < 0.5 ? 'sell' : 'buy');
+            let intent = isRentDay ? 'rent' : shopOwner ? 'sell' : (Math.random() < getCustomerBuyChance() ? 'buy' : 'sell');
 
             let item = null;
             let items = [];
             let request = null;
+            let requests = [];
             let targetPrice = 0;
             let hasCup = false;
 
@@ -2648,19 +3454,22 @@
                 item = items[0];
                 targetPrice = items.reduce((total, offeredItem) => total + offeredItem.askPrice, 0);
             } else if (intent === "buy") {
-                request = CUSTOMER_REQUESTS[Math.floor(Math.random() * CUSTOMER_REQUESTS.length)];
-                const marketItems = getRequestMarketItems(request);
+                requests = chooseCustomerRequests();
+                request = requests[0];
+                const marketItems = getRequestMarketItems(requests);
                 const sample = marketItems[0] || ITEM_DATABASE[0];
-                item = { name: `（需求）${request.label}`, icon: 'fa-box-open', w: sample.w || 1, h: sample.h || 1, rarity: '—', quality: 'mid', labelQuality: 'mid', baseValue: sample.baseValue || 50, tags: sample.tags || [] };
+                const requestLabel = requests.map(customerRequest => customerRequest.label).join('／');
+                item = { name: `（需求）${requestLabel}`, icon: 'fa-box-open', w: sample.w || 1, h: sample.h || 1, rarity: '—', quality: 'mid', labelQuality: 'mid', baseValue: sample.baseValue || 50, tags: sample.tags || [] };
                 ensureItemFields(item);
-                hasCup = request.tag === 'water' && Math.random() < 0.25 &&
-                    (gameState.gridItems.some(shelfItem => shelfItem.shopGoodId === 'faucet') ||
+                hasCup = requests.some(customerRequest => customerRequest.kind === 'tag' && customerRequest.tag === 'water') &&
+                    Math.random() < 0.25 &&
+                    (gameState.ownedWaterComponents.includes('faucet') ||
                         gameState.ownedWaterTools.some(tool => tool.id === 'water-maker' &&
                             gameState.gridItems.some(shelfItem => shelfItem.shopGoodId === 'water-maker') &&
                             gameState.professions.includes('waterMerchant') && gameState.waterProduction.makerUses < 3));
-                const intelMultiplier = getCampIntelMultiplier(faction, request);
+                const intelMultiplier = getCampIntelMultiplier(faction, requests);
                 targetPrice = Math.max(1, Math.round(
-                    getRequestMedianPrice(request) * 1.5 * (0.9 + Math.random() * 0.2) *
+                    getRequestMedianPrice(requests) * 1.5 * (0.9 + Math.random() * 0.2) *
                     getFactionBudgetMultiplier(faction) * intelMultiplier
                 ));
             } else {
@@ -2677,7 +3486,9 @@
 
             const customerName = intent === 'rent' ? '房東' : shopOwner ? shopOwner.name : names[faction][Math.floor(Math.random() * names[faction].length)];
 
-            const buyPhrase = request ? request.phrases[Math.floor(Math.random() * request.phrases.length)] : '';
+            const buyPhrase = requests.length > 1
+                ? `想找${requests.map(customerRequest => `「${customerRequest.label}」`).join('、')}，符合其中任一項即可`
+                : request ? request.phrases[Math.floor(Math.random() * request.phrases.length)] : '';
             const bundlePhrase = intent === 'sell' && items.length > 1
                 ? SELLER_BUNDLE_PHRASES[Math.floor(Math.random() * SELLER_BUNDLE_PHRASES.length)]
                 : null;
@@ -2691,6 +3502,7 @@
                 item: item,
                 items,
                 request: request,
+                requests,
                 targetPrice: targetPrice,
                 rentAmount: intent === 'rent' ? gameState.rentAmount : 0,
                 rentArrears: intent === 'rent' ? gameState.rentArrears : 0,
@@ -2733,9 +3545,11 @@
                 qLine.classList.remove('hidden');
                 document.getElementById('item-icon-box').innerHTML = `<i class="fa-solid fa-house"></i>`;
             } else {
-                document.getElementById('item-title').innerText = `需求：${request.label}`;
-                document.getElementById('item-size-tag').innerText = request.kind === 'tag' ? `種類 ${request.tag}` : getFactionName(request.category);
-                document.getElementById('item-rarity').innerHTML = `<span class="text-cyan-300">拖曳符合物品至櫃台並點選</span>`;
+                document.getElementById('item-title').innerText = `需求：${requests.map(customerRequest => customerRequest.label).join('／')}`;
+                document.getElementById('item-size-tag').innerText = requests.length > 1
+                    ? `符合任一項即可`
+                    : request.kind === 'tag' ? `種類 ${request.tag}` : getFactionName(request.category);
+                document.getElementById('item-rarity').innerHTML = `<span class="text-cyan-300">拖曳符合任一需求的物品至櫃台並點選</span>`;
                 qLine.classList.add('hidden');
                 document.getElementById('item-icon-box').innerHTML = `<i class="fa-solid fa-magnifying-glass"></i>`;
             }
@@ -2911,7 +3725,7 @@
         function findCurrentOfferItems() {
             if (!currentCustomer || currentCustomer.intent !== 'buy') return [];
             const selected = gameState.counterItems.filter(i =>
-                selectedOfferItemIds.includes(i.id) && itemMatchesRequest(i, currentCustomer.request)
+                selectedOfferItemIds.includes(i.id) && itemMatchesCustomerRequest(i, currentCustomer)
             );
             if (selected.length > 0) return selected;
             if (selectedOfferItemIds.length === 0 && currentCustomer.guestWaterItem) return [currentCustomer.guestWaterItem];
@@ -2939,11 +3753,11 @@
 
         function prepareCustomerCupWater() {
             if (!currentCustomer || !currentCustomer.hasCup || currentCustomer.guestWaterItem ||
-                !currentCustomer.request || currentCustomer.request.tag !== 'water') return false;
+                !getCustomerRequests(currentCustomer).some(request => request.kind === 'tag' && request.tag === 'water')) return false;
             const maker = gameState.ownedWaterTools.some(tool => tool.id === 'water-maker' &&
                 gameState.gridItems.some(item => item.shopGoodId === 'water-maker') &&
                 gameState.professions.includes('waterMerchant') && gameState.waterProduction.makerUses < 3);
-            const faucet = gameState.gridItems.some(item => item.shopGoodId === 'faucet');
+            const faucet = gameState.ownedWaterComponents.includes('faucet');
             if (!maker && !faucet) return false;
             let water;
             if (maker) {
@@ -2973,7 +3787,7 @@
                 if (findCurrentOfferItems().length === 0) prepareCustomerCupWater();
                 const offers = findCurrentOfferItems();
                 if (offers.length === 0) {
-                    alert(currentCustomer.hasCup && currentCustomer.request.tag === 'water'
+                    alert(currentCustomer.hasCup && getCustomerRequests(currentCustomer).some(request => request.kind === 'tag' && request.tag === 'water')
                         ? "目前沒有可用的水源或水杯，無法供應。"
                         : "請先把符合需求的物品拖到櫃台，並點選要成交的物品（可多選）。");
                     return;
@@ -3068,11 +3882,7 @@
                     return;
                 }
                 const marketPrice = offers.reduce((total, offer) => total + offer.price, 0);
-                const salePrice = Math.max(1, Math.min(finalPrice, marketPrice));
-                if (salePrice > currentCustomer.targetPrice) {
-                    alert(`顧客預算上限為 ${currentCustomer.targetPrice}G，請降低總出價或減少商品。`);
-                    return;
-                }
+                const salePrice = Math.max(1, Math.min(finalPrice, marketPrice, currentCustomer.targetPrice));
 
                 const soldNames = offers.map(offer => offer.name).join('、');
                 const soldQualities = offers.map(getItemQualityLabel).join('、');
@@ -3205,6 +4015,8 @@
             }
             gameState.dailyStats.customersToday = 0;
             gameState.dailyStats.dealsToday = 0;
+            stepFarmGrowth();
+            stepMiningFacilities();
             gameState.customerFactionQueue = createCustomerFactionQueue(gameState.maxCustomers);
             gameState.customersRemaining = gameState.customerFactionQueue.length;
             gameState.waterProduction = { day: gameState.day, makerUses: 0, faucetPoorUses: 0 };
